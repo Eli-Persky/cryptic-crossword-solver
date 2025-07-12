@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cryptic Crossword Solver</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <h1>Cryptic Crossword Solver</h1>
+    <form action="/solve" method="POST">
+        <label for="clue">Enter your cryptic crossword clue:</label><br>
+        <input type="text" id="clue" name="clue" placeholder="Enter clue here..." required><br><br>
+        <button type="submit">Solve</button>
+    </form>
+
+    {% if error %}
+        <p style="color: red;">{{ error }}</p>
+    {% endif %}
+
+    {% if clue and solution %}
+        <h2>Solution</h2>
+        <p><strong>Clue:</strong> {{ clue }}</p>
+        <p><strong>Solution:</strong> {{ solution }}</p>
+    {% endif %}
+</body>
+</html>
