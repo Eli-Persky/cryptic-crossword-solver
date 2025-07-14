@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('clue-form');
     const clueInput = document.getElementById('clue');
+    const lengthInput = document.getElementById('solution-length');
     const loading = document.getElementById('loading');
     const errorDisplay = document.getElementById('error-display');
     const solutionDisplay = document.getElementById('solution-display');
@@ -12,8 +13,15 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     async function solveClue() {
-        const clue = clueInput.value.trim();
+        let clue = clueInput.value.trim();
+        const solutionLength = lengthInput.value;
+        
         if (!clue) return;
+
+        // Append length to clue if provided
+        if (solutionLength && solutionLength >= 3) {
+            clue += ` (${solutionLength})`;
+        }
 
         showLoading();
         hideResults();
@@ -30,7 +38,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const data = await response.json();
 
             if (response.ok) {
-                displaySolution(clue, data.solution);
+                // Pass both the formatted clue (with length) and original clue for display
+                displaySolution(clue, clueInput.value.trim(), data.solution);
             } else {
                 displayError(data.error || 'Error retrieving solution');
             }
@@ -41,8 +50,21 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    function displaySolution(clue, solution) {
-        document.getElementById('result-clue').textContent = clue;
+    function displaySolution(formattedClue, originalClue, solution) {
+        // Display the original clue (without length) for better readability
+        document.getElementById('result-clue').textContent = originalClue;
+        
+        // Show length information if it was provided
+        const lengthInput = document.getElementById('solution-length');
+        const lengthInfo = document.getElementById('length-info');
+        const expectedLength = document.getElementById('expected-length');
+        
+        if (lengthInput.value && lengthInput.value >= 3) {
+            expectedLength.textContent = lengthInput.value;
+            lengthInfo.classList.remove('hidden');
+        } else {
+            lengthInfo.classList.add('hidden');
+        }
         
         // Display main solution
         const completeSolution = solution.complete_solution;

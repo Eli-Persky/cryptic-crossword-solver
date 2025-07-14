@@ -14,6 +14,13 @@
             <form id="clue-form">
                 <label for="clue">Enter your cryptic crossword clue:</label>
                 <input type="text" id="clue" name="clue" placeholder="Enter clue here..." required>
+                
+                <div class="length-input">
+                    <label for="solution-length">Solution length (optional):</label>
+                    <input type="number" id="solution-length" name="solution-length" min="3" max="50" placeholder="e.g. 7">
+                    <small>If you know the number of letters in the answer</small>
+                </div>
+                
                 <button type="submit" id="solve-btn">Solve Clue</button>
             </form>
         </div>
@@ -29,6 +36,9 @@
             
             <div class="clue-display">
                 <strong>Clue:</strong> <span id="result-clue"></span>
+                <div id="length-info" class="length-info hidden">
+                    <small>Expected length: <span id="expected-length"></span> letters</small>
+                </div>
             </div>
             
             <div class="main-solution">

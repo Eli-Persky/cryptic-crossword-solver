@@ -119,6 +119,22 @@ def get_dummy_solution(clue):
         "confidence": 0.8
     }
 
+def load_prompt_template():
+    """Load the main prompt template from file."""
+    try:
+        prompt_path = os.path.join(os.path.dirname(__file__), 'prompts', 'main_prompt.txt')
+        with open(prompt_path, 'r', encoding='utf-8') as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        # Fallback prompt if file not found
+        return """You are an expert at solving cryptic crossword clues. 
+        
+                Analyze the following cryptic crossword clue step by step:
+
+                Clue: {clue}
+
+                Provide a detailed analysis with wordplay breakdown."""
+
 def get_openai_solution(clue):
     """Use OpenAI's API to solve the cryptic crossword clue with structured output."""
     api_key = os.getenv("OPENAI_API_KEY")
@@ -135,38 +151,7 @@ def get_openai_solution(clue):
         "Authorization": f"Bearer {api_key}"
     }
     
-    prompt = f"""
-    You are an expert at solving cryptic crossword clues. 
-    
-    Analyze the following cryptic crossword clue step by step: 
-    
-    Clue: {clue}
-    
-    For your analysis:
-    1. Try multiple approaches if needed (record these as attempted_solutions)
-    2. Identify the definition part (usually at start or end)
-    3. For each attempted solution, break down the wordplay into components with:
-       - The indicator word/phrase
-       - The type of wordplay (anagram, charade, container, etc.)
-       - The target words (from the clue itself) being operated on. 
-            -- For an anagram indicator, the target is the words in the clue which are to be anagrammed  
-            -- For a container or containment indicator, the target is the words which define what exactly is to be contained or be a container
-            -- For a deletion or replacement indicator, the target is the words which indicate what letters to remove or replace
-    4. Provide your final complete solution with confidence level
-    
-    Types of wordplay to consider:
-    - charade: word to be replaced by a synonym, abbreviation or example
-    - anagram: letters rearranged 
-    - container: word to contain another word or letters
-    - contents: word or letters to be inserted into another word
-    - reversal: word backwards
-    - hidden: word hidden in the clue
-    - homophone: sounds like another word
-    - deletion: removing letters
-    - selection: choosing letters from a word
-    - replacement: substituting letters
-    - link: connecting words
-    """
+    prompt = load_prompt_template().format(clue=clue)
     
     data = {
         "model": "gpt-4o",
@@ -263,34 +248,8 @@ def get_claude_solution(clue):
         "anthropic-version": "2023-06-01"
     }
     
-    prompt = f"""
-    You are an expert at solving cryptic crossword clues. 
-    
-    Analyze the following cryptic crossword clue step by step:
-    
-    Clue: {clue}
-    
-    Use the solve_cryptic_clue tool to provide your analysis. For your analysis:
-    1. Try multiple approaches if needed (record these as attempted_solutions)
-    2. Identify the definition part (usually at start or end)
-    3. Break down the wordplay into components with:
-       - The indicator word/phrase
-       - The type of wordplay (anagram, charade, container, etc.)
-       - The target words being operated on
-    4. Provide your final complete solution with confidence level
-    
-    Types of wordplay to consider:
-    - charade: parts joined together
-    - anagram: letters rearranged 
-    - container: one word inside another
-    - contents: taking letters from inside a word
-    - reversal: word backwards
-    - hidden: word hidden in the clue
-    - homophone: sounds like another word
-    - deletion: removing letters
-    - replacement: substituting letters
-    - link: connecting words
-    """
+    # Load prompt template and insert the clue
+    prompt = load_prompt_template().format(clue=clue)
     
     data = {
         "model": "claude-3-5-sonnet-20241022",
