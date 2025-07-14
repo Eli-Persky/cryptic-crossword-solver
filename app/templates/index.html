@@ -7,21 +7,56 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
 <body>
-    <h1>Cryptic Crossword Solver</h1>
-    <form action="/solve" method="POST">
-        <label for="clue">Enter your cryptic crossword clue:</label><br>
-        <input type="text" id="clue" name="clue" placeholder="Enter clue here..." required><br><br>
-        <button type="submit">Solve</button>
-    </form>
+    <div class="container">
+        <h1>Cryptic Crossword Solver</h1>
+        
+        <div class="input-section">
+            <form id="clue-form">
+                <label for="clue">Enter your cryptic crossword clue:</label>
+                <input type="text" id="clue" name="clue" placeholder="Enter clue here..." required>
+                <button type="submit" id="solve-btn">Solve Clue</button>
+            </form>
+        </div>
 
-    {% if error %}
-        <p style="color: red;">{{ error }}</p>
-    {% endif %}
+        <div id="loading" class="loading hidden">
+            <p>Analyzing your clue...</p>
+        </div>
 
-    {% if clue and solution %}
-        <h2>Solution</h2>
-        <p><strong>Clue:</strong> {{ clue }}</p>
-        <p><strong>Solution:</strong> {{ solution }}</p>
-    {% endif %}
+        <div id="error-display" class="error hidden"></div>
+
+        <div id="solution-display" class="result-section hidden">
+            <h2>Solution Analysis</h2>
+            
+            <div class="clue-display">
+                <strong>Clue:</strong> <span id="result-clue"></span>
+            </div>
+            
+            <div class="main-solution">
+                <div class="answer-box">
+                    <div class="answer-word" id="main-answer"></div>
+                    <div class="confidence">
+                        Confidence: <span id="confidence-score"></span>%
+                    </div>
+                </div>
+            </div>
+            
+            <div class="definition-section">
+                <h3>Definition</h3>
+                <div id="definition-text" class="definition-box"></div>
+            </div>
+            
+            <div class="wordplay-section">
+                <h3>Wordplay Breakdown</h3>
+                <div id="wordplay-components" class="components-list"></div>
+            </div>
+            
+            <div id="attempts-section" class="attempts hidden">
+                <h3>Solution Attempts</h3>
+                <div id="attempts-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
 </body>
 </html>

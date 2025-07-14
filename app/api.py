@@ -14,10 +14,37 @@ def submit_clue():
     
     solution = get_llm_solution(clue)
     
-    if solution:
-        return jsonify({'clue': clue, 'solution': solution}), 200
+    # Handle both structured responses and error responses
+    if isinstance(solution, dict):
+        if 'error' in solution:
+            # Return error response
+            return jsonify(solution), 500
+        else:
+            # Return structured solution
+            return jsonify({
+                'clue': clue,
+                'solution': solution
+            }), 200
     else:
-        return jsonify({'error': 'Could not retrieve solution'}), 500
+        # Fallback for string responses (legacy support)
+        return jsonify({
+            'clue': clue, 
+            'solution': {
+                'attempted_solutions': [],
+                'complete_solution': {
+                    'solution': str(solution),
+                    'definition': 'Legacy response format',
+                    'wordplay_components': [
+                        {
+                            'indicator': 'legacy',
+                            'wordplay_type': 'other',
+                            'target': 'unstructured'
+                        }
+                    ]
+                },
+                'confidence': 0.5
+            }
+        }), 200
 
 @api_blueprint.route('/api/health', methods=['GET'])
 def health_check():

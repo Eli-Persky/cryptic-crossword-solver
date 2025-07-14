@@ -3,13 +3,14 @@ import requests
 import json
 import time
 from dotenv import load_dotenv
+from app.schemas import OPENAI_FUNCTION_SCHEMAS, ANTHROPIC_TOOL_SCHEMAS, CROSSWORD_SOLUTION_SCHEMA
 
 # Load environment variables from .env file
 load_dotenv()
 
 # Global variables
 LAST_API_CALL = 0  # Timestamp of the last API call
-API_RATE_LIMIT = 5  # Minimum seconds between API calls
+API_RATE_LIMIT = int(os.getenv("API_RATE_LIMIT", 5))  # Minimum seconds between API calls
 
 def format_response(data):
     # Function to format the response from the LLM API
@@ -34,7 +35,7 @@ def get_llm_solution(clue):
     :return: The solution string or an error message.
     """
     # Check if we're in test mode
-    test_mode = os.getenv("TEST_MODE", "false").lower() == "true"
+    test_mode = os.getenv("TEST_MODE", "true").lower() == "true"
     
     if test_mode:
         return get_dummy_solution(clue)
@@ -63,11 +64,11 @@ def get_llm_solution(clue):
 
 def get_dummy_solution(clue):
     """
-    Return a dummy solution for testing purposes.
+    Return a dummy solution for testing purposes with structured output.
     This avoids making actual API calls during development and testing.
     
     :param clue: The cryptic crossword clue as a string.
-    :return: A dummy solution string.
+    :return: A structured dummy solution following the schema.
     """
     # Create a deterministic but varied response based on the clue
     word_count = len(clue.split())
@@ -85,18 +86,48 @@ def get_dummy_solution(clue):
     solution_index = (word_count + clue_length) % len(dummy_solutions)
     selected_solution = dummy_solutions[solution_index]
     
-    return f"""Solution: {selected_solution}
-    
-    Explanation: This is a dummy solution generated in test mode.
-    The actual clue was: "{clue}"
-
-    To use actual LLM solutions, disable TEST_MODE in your .env file."""
+    return {
+        "attempted_solutions": [
+            {
+                "solution": "PARTIAL",
+                "definition": "First attempt at definition",
+                "wordplay_components": [
+                    {
+                        "indicator": "test",
+                        "wordplay_type": "anagram",
+                        "target": "dummy"
+                    }
+                ]
+            }
+        ],
+        "complete_solution": {
+            "solution": selected_solution,
+            "definition": f"Test definition for {selected_solution.lower()}",
+            "wordplay_components": [
+                {
+                    "indicator": "test indicator",
+                    "wordplay_type": "charade",
+                    "target": "test target"
+                },
+                {
+                    "indicator": "dummy",
+                    "wordplay_type": "anagram",
+                    "target": "words from clue"
+                }
+            ]
+        },
+        "confidence": 0.8
+    }
 
 def get_openai_solution(clue):
-    """Use OpenAI's API to solve the cryptic crossword clue."""
+    """Use OpenAI's API to solve the cryptic crossword clue with structured output."""
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        return "Error: OpenAI API key not found. Set OPENAI_API_KEY in .env file."
+        return {
+            "error": "OpenAI API key not found. Set OPENAI_API_KEY in .env file.",
+            "error_code": "API_ERROR",
+            "suggestions": ["Add OPENAI_API_KEY to your .env file"]
+        }
     
     url = "https://api.openai.com/v1/chat/completions"
     headers = {
@@ -106,36 +137,124 @@ def get_openai_solution(clue):
     
     prompt = f"""
     You are an expert at solving cryptic crossword clues. 
-    Please solve the following cryptic crossword clue and explain your reasoning step by step.
+    
+    Analyze the following cryptic crossword clue step by step: 
     
     Clue: {clue}
     
-    Provide your answer in this format:
-    Solution: [answer word or phrase]
-    Explanation: [your step-by-step reasoning]
+    For your analysis:
+    1. Try multiple approaches if needed (record these as attempted_solutions)
+    2. Identify the definition part (usually at start or end)
+    3. For each attempted solution, break down the wordplay into components with:
+       - The indicator word/phrase
+       - The type of wordplay (anagram, charade, container, etc.)
+       - The target words (from the clue itself) being operated on. 
+            -- For an anagram indicator, the target is the words in the clue which are to be anagrammed  
+            -- For a container or containment indicator, the target is the words which define what exactly is to be contained or be a container
+            -- For a deletion or replacement indicator, the target is the words which indicate what letters to remove or replace
+    4. Provide your final complete solution with confidence level
+    
+    Types of wordplay to consider:
+    - charade: word to be replaced by a synonym, abbreviation or example
+    - anagram: letters rearranged 
+    - container: word to contain another word or letters
+    - contents: word or letters to be inserted into another word
+    - reversal: word backwards
+    - hidden: word hidden in the clue
+    - homophone: sounds like another word
+    - deletion: removing letters
+    - selection: choosing letters from a word
+    - replacement: substituting letters
+    - link: connecting words
     """
     
     data = {
-        "model": "gpt-4", # Or "gpt-3.5-turbo" for a less expensive option
+        "model": "gpt-4o",
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.3  # Lower temperature for more deterministic results
+        "functions": [OPENAI_FUNCTION_SCHEMAS["solve_cryptic_clue"]],
+        "function_call": {"name": "solve_cryptic_clue"},
+        "temperature": 0.3
     }
     
     try:
         response = requests.post(url, headers=headers, json=data)
-        response.raise_for_status()  # Raise exception for 4XX/5XX responses
+        response.raise_for_status()
         
         result = response.json()
-        solution_text = result["choices"][0]["message"]["content"]
-        return solution_text
+        
+        # Extract structured response from function call
+        if "choices" in result and result["choices"]:
+            choice = result["choices"][0]
+            if "message" in choice and "function_call" in choice["message"]:
+                function_call = choice["message"]["function_call"]
+                if function_call["name"] == "solve_cryptic_clue":
+                    return json.loads(function_call["arguments"])
+        """
+        # Fallback to regular response if function calling failed
+        if "choices" in result and result["choices"]:
+            content = result["choices"][0]["message"]["content"]
+            return parse_unstructured_response(content)
+        """ 
+        return {
+            "error": "Unexpected response format from OpenAI",
+            "error_code": "PARSING_ERROR"
+        }
+        
+    except requests.exceptions.RequestException as e:
+        return {
+            "error": f"API request failed: {str(e)}",
+            "error_code": "API_ERROR"
+        }
+    except json.JSONDecodeError as e:
+        return {
+            "error": f"Failed to parse response: {str(e)}",
+            "error_code": "PARSING_ERROR"
+        }
     except Exception as e:
-        return f"Error: {str(e)}"
+        return {
+            "error": f"Unexpected error: {str(e)}",
+            "error_code": "UNKNOWN"
+        }
+"""
+def parse_unstructured_response(content):
 
+    lines = content.strip().split('\n')
+    solution = ""
+    explanation = ""
+    
+    # Simple parsing - look for "Solution:" patterns
+    for i, line in enumerate(lines):
+        if line.lower().startswith('solution:'):
+            solution = line.split(':', 1)[1].strip()
+        elif line.lower().startswith('explanation:'):
+            explanation = '\n'.join(lines[i:]).split(':', 1)[1].strip()
+            break
+    
+    return {
+        "attempted_solutions": [],
+        "complete_solution": {
+            "solution": solution or "Could not parse solution",
+            "definition": "Parsed from unstructured response",
+            "wordplay_components": [
+                {
+                    "indicator": "parsed",
+                    "wordplay_type": "other",
+                    "target": "unstructured text"
+                }
+            ]
+        },
+        "confidence": 0.5
+    }
+"""
 def get_claude_solution(clue):
-    """Use Anthropic's Claude API to solve the cryptic crossword clue."""
+    """Use Anthropic's Claude API to solve the cryptic crossword clue with structured output."""
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
-        return "Error: Anthropic API key not found. Set ANTHROPIC_API_KEY in .env file."
+        return {
+            "error": "Anthropic API key not found. Set ANTHROPIC_API_KEY in .env file.",
+            "error_code": "API_ERROR",
+            "suggestions": ["Add ANTHROPIC_API_KEY to your .env file"]
+        }
     
     url = "https://api.anthropic.com/v1/messages"
     headers = {
@@ -146,19 +265,39 @@ def get_claude_solution(clue):
     
     prompt = f"""
     You are an expert at solving cryptic crossword clues. 
-    Please solve the following cryptic crossword clue and explain your reasoning step by step.
+    
+    Analyze the following cryptic crossword clue step by step:
     
     Clue: {clue}
     
-    Provide your answer in this format:
-    Solution: [answer word or phrase]
-    Explanation: [your step-by-step reasoning]
+    Use the solve_cryptic_clue tool to provide your analysis. For your analysis:
+    1. Try multiple approaches if needed (record these as attempted_solutions)
+    2. Identify the definition part (usually at start or end)
+    3. Break down the wordplay into components with:
+       - The indicator word/phrase
+       - The type of wordplay (anagram, charade, container, etc.)
+       - The target words being operated on
+    4. Provide your final complete solution with confidence level
+    
+    Types of wordplay to consider:
+    - charade: parts joined together
+    - anagram: letters rearranged 
+    - container: one word inside another
+    - contents: taking letters from inside a word
+    - reversal: word backwards
+    - hidden: word hidden in the clue
+    - homophone: sounds like another word
+    - deletion: removing letters
+    - replacement: substituting letters
+    - link: connecting words
     """
     
     data = {
-        "model": "claude-3-opus-20240229",  # Or use a different Claude model
+        "model": "claude-3-5-sonnet-20241022",
         "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 1000,
+        "tools": ANTHROPIC_TOOL_SCHEMAS,
+        "tool_choice": {"type": "tool", "name": "solve_cryptic_clue"},
+        "max_tokens": 1500,
         "temperature": 0.3
     }
     
@@ -167,10 +306,40 @@ def get_claude_solution(clue):
         response.raise_for_status()
 
         result = response.json()
-        solution_text = result["content"][0]["text"]
-        return solution_text
+        
+        # Extract structured response from tool use
+        if "content" in result:
+            for content_block in result["content"]:
+                if content_block.get("type") == "tool_use" and content_block.get("name") == "solve_cryptic_clue":
+                    return content_block["input"]
+        """"
+        # Fallback to parsing text content
+        if "content" in result and result["content"]:
+            text_content = ""
+            for content_block in result["content"]:
+                if content_block.get("type") == "text":
+                    text_content += content_block.get("text", "")
+            
+            if text_content:
+                return parse_unstructured_response(text_content)
+        """
+        return {
+            "error": "Unexpected response format from Claude",
+            "error_code": "PARSING_ERROR"
+        }
+        
+    except requests.exceptions.RequestException as e:
+        return {
+            "error": f"API request failed: {str(e)}",
+            "error_code": "API_ERROR"
+        }
+    except json.JSONDecodeError as e:
+        return {
+            "error": f"Failed to parse response: {str(e)}",
+            "error_code": "PARSING_ERROR"
+        }
     except Exception as e:
-        return f"Error: {str(e)}"
-    
-
-    """Example clue: Initially irritated, rising uproar about drink, tasteless (7)"""
+        return {
+            "error": f"Unexpected error: {str(e)}",
+            "error_code": "UNKNOWN"
+        }
