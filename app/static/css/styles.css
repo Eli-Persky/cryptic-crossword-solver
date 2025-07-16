@@ -200,16 +200,6 @@ button:hover {
     text-transform: uppercase;
 }
 
-.confidence {
-    background: #28a745;
-    color: white;
-    padding: 8px 15px;
-    border-radius: 20px;
-    font-size: 0.9em;
-    font-weight: 600;
-    display: inline-block;
-}
-
 .definition-section, .wordplay-section {
     border-top: 2px solid #f0f0f0;
     padding-top: 20px;
@@ -336,6 +326,49 @@ button:hover {
 
 .hidden {
     display: none;
+}
+
+.reasoning {
+    margin-top: 25px;
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 20px;
+    border-left: 4px solid #667eea;
+}
+
+.reasoning h3 {
+    color: #333;
+    margin-bottom: 15px;
+    font-size: 1.2em;
+}
+
+.reasoning-box {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    line-height: 1.6;
+    color: #444;
+    white-space: pre-wrap;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.toggle-btn {
+    background: #667eea;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9em;
+    margin-top: 10px;
+    transition: background-color 0.3s ease;
+}
+
+.toggle-btn:hover {
+    background: #5a67d8;
 }
 
 /* Responsive design */

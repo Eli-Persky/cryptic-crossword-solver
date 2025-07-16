@@ -41,8 +41,7 @@ def submit_clue():
                             'target': 'unstructured'
                         }
                     ]
-                },
-                'confidence': 0.5
+                }
             }
         }), 200
 

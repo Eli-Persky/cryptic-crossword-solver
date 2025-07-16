@@ -67,15 +67,9 @@ CROSSWORD_SOLUTION_SCHEMA = {
 			"items": PARTIAL_SOLUTION_SCHEMA,
 			"description": "All incomplete attempts at finding a solution, these may or may not include a solution but should contain some amount of wordplay"
 		},
-		"complete_solution": COMPLETE_SOLUTION_SCHEMA,
-		"confidence": {
-			"type": "number",
-			"minimum": 0,
-			"maximum": 1,
-			"description": "Confidence level in the complete solution (0.0 to 1.0)"
-		}
+		"complete_solution": COMPLETE_SOLUTION_SCHEMA
 	},
-	"required": ["complete_solution", "confidence"]
+	"required": ["complete_solution"]
 }
 
 ERROR_RESPONSE_SCHEMA = {

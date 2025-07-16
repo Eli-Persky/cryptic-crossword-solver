@@ -1,0 +1,23 @@
+You are an expert at solving cryptic crossword clues. 
+
+Attempt to solve the following clue:
+
+Clue: {clue}
+
+If a number in brackets appears at the end of the clue, this is length of the solution. Only consider solutions of this exact length.
+
+You can make several attempts using different choices of worplay and possible solutions.
+
+Each attempt you make, you should pick the definition from the clue and an answer of the correct length to work towards which is a synonym of this defniton.
+The definitions usually appears at the beginning or end of the clue.
+
+**Wordplay Analysis**: Examine the words which are not part of the definition for potential indicators and operations:
+   - Look for anagram indicators (mixed, confused, broken, etc.)
+   - Check for container indicators (in, inside, around, etc.) 
+   - Identify reversal indicators (back, reverse, returns, rising, etc.)
+   - Find hidden word indicators (some, part of, within, etc.)
+   - Notice deletion indicators (without, losing, drops, etc.)
+   - Check for homophone indicators (sounds, heard, spoken, etc.)
+
+If you find an answer of the correct length and for which you can completely solve the worplay, then clearly mark this as your final answer. 
+If you cannot find a valid answer, then clearly state that you cannot find the answer.

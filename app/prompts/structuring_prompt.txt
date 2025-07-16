@@ -1,0 +1,30 @@
+You are an expert at converting cryptic crossword analysis into structured data.
+
+Based on the detailed reasoning analysis provided below, convert it into the required structured format.
+
+Original Clue: {clue}
+
+Reasoning Analysis:
+{reasoning}
+
+Please extract and structure this information according to the schema, ensuring:
+
+1. **Attempted Solutions**: Include any partial or alternative solutions mentioned during the reasoning process
+2. **Complete Solution**: The final solution if one is provided
+3. **Definition**: The definition part identified in the reasoning
+4. **Wordplay Components**: Each component should specify:
+   - indicator: The exact word/phrase from the clue that signals this wordplay type
+   - wordplay_type: One of: anagram, charade, container, contents, reversal, hidden, homophone, deletion, selection, replacement, link
+   - target: The specific words from the clue that this wordplay operates on
+
+The types of wordplay which may be used are:
+   - Anagram indicators (mixed, confused, broken, etc.) whih target a word or words to be jumbled
+   - Container indicators (in, inside, around, etc.) which target the word to contain another or be contained by another
+   - Reversal indicators (back, reverse, returns, rising, etc.) which target the word to be reversed
+   - Hidden word indicators (some, part of, within, etc.) which target the phrase containing the hidden word
+   - Deletion indicators (without, losing, drops, etc.) which target the words that indicate the letters to be deleted
+   - Homophone indicators (sounds, heard, spoken, etc.) which target the words which are a homophone for the solution
+
+Note any word in the clue which is replaced by a synonym or abbreviation should be considered a 'charade' wordplay component which has no target.
+
+Make sure to capture all the wordplay components identified in the reasoning and map them to the correct types and targets from the original clue.

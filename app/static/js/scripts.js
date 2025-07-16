@@ -70,9 +70,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const completeSolution = solution.complete_solution;
         document.getElementById('main-answer').textContent = completeSolution.solution || 'Unknown';
         
-        const confidence = solution.confidence || 0;
-        document.getElementById('confidence-score').textContent = Math.round(confidence * 100);
-        
         // Display definition
         document.getElementById('definition-text').textContent = completeSolution.definition || 'Not provided';
         
@@ -124,6 +121,33 @@ document.addEventListener('DOMContentLoaded', function() {
             attemptsSection.classList.remove('hidden');
         } else {
             attemptsSection.classList.add('hidden');
+        }
+
+        // Display reasoning analysis if available
+        const reasoningSection = document.getElementById('reasoning-section');
+        const reasoningText = document.getElementById('reasoning-text');
+        const toggleButton = document.getElementById('toggle-reasoning');
+        
+        if (solution.reasoning_analysis) {
+            reasoningText.textContent = solution.reasoning_analysis;
+            reasoningSection.classList.remove('hidden');
+            
+            // Add toggle functionality
+            toggleButton.addEventListener('click', function() {
+                const isVisible = !reasoningText.classList.contains('hidden');
+                if (isVisible) {
+                    reasoningText.classList.add('hidden');
+                    toggleButton.textContent = 'Show Reasoning';
+                } else {
+                    reasoningText.classList.remove('hidden');
+                    toggleButton.textContent = 'Hide Reasoning';
+                }
+            });
+            
+            // Initially hide the reasoning text
+            reasoningText.classList.add('hidden');
+        } else {
+            reasoningSection.classList.add('hidden');
         }
 
         solutionDisplay.classList.remove('hidden');
