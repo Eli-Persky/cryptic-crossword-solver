@@ -36,7 +36,7 @@ cryptic-crossword-solver
 
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/cryptic-crossword-solver.git
+   git clone https://github.com/Eli-Persky/cryptic-crossword-solver.git
    cd cryptic-crossword-solver
    ```
 
