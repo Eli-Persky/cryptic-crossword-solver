@@ -1,5 +1,5 @@
 from flask import Flask, Blueprint, request, jsonify
-from app.utils import get_llm_solution
+from app.get_solution import get_llm_solution
 
 # Create a blueprint
 api_blueprint = Blueprint('api', __name__)

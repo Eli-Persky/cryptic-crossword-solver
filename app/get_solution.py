@@ -2,15 +2,12 @@ import os
 import requests
 import json
 import time
-from dotenv import load_dotenv
+from config import Config
 from app.schemas import OPENAI_FUNCTION_SCHEMAS, ANTHROPIC_TOOL_SCHEMAS, CROSSWORD_SOLUTION_SCHEMA
-
-# Load environment variables from .env file
-load_dotenv()
 
 # Global variables
 LAST_API_CALL = 0  # Timestamp of the last API call
-API_RATE_LIMIT = int(os.getenv("API_RATE_LIMIT", 5))  # Minimum seconds between API calls
+API_RATE_LIMIT = Config.API_RATE_LIMIT  # Rate limit in seconds
 
 def format_response(data):
     # Function to format the response from the LLM API
@@ -35,7 +32,7 @@ def get_llm_solution(clue):
     :return: The solution string or an error message.
     """
     # Check if we're in test mode
-    test_mode = os.getenv("TEST_MODE", "true").lower() == "true"
+    test_mode = Config.DEBUG
     
     if test_mode:
         return get_dummy_solution(clue)
@@ -53,7 +50,7 @@ def get_llm_solution(clue):
     LAST_API_CALL = current_time
     
     # Choose which API to use (OpenAI, Claude, etc.)
-    api_choice = os.getenv("LLM_API_PROVIDER", "openai").lower()
+    api_choice = Config.API_PROVIDER.lower()
     
     if api_choice == "openai":
         return get_openai_solution(clue)
@@ -157,7 +154,7 @@ def load_prompt_template(prompt_type="reasoning"):
 
 def get_openai_solution(clue):
     """Use OpenAI's API to solve the cryptic crossword clue with two-stage approach."""
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = Config.OPENAI_API_KEY
     if not api_key:
         return {
             "error": "OpenAI API key not found. Set OPENAI_API_KEY in .env file.",
@@ -227,7 +224,7 @@ def get_openai_solution(clue):
 
 def get_claude_solution(clue):
     """Use Anthropic's Claude API to solve the cryptic crossword clue with two-stage approach."""
-    api_key = os.getenv("ANTHROPIC_API_KEY")
+    api_key = Config.ANTHROPIC_API_KEY
     if not api_key:
         return {
             "error": "Anthropic API key not found. Set ANTHROPIC_API_KEY in .env file.",
@@ -297,7 +294,7 @@ def get_claude_solution(clue):
 
 def get_openai_reasoning(prompt):
     """Get reasoning from OpenAI without structured output."""
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = Config.OPENAI_API_KEY
     if not api_key:
         return {
             "error": "OpenAI API key not found. Set OPENAI_API_KEY in .env file.",
@@ -339,7 +336,7 @@ def get_openai_reasoning(prompt):
 
 def get_claude_reasoning(prompt):
     """Get reasoning from Claude without structured output."""
-    api_key = os.getenv("ANTHROPIC_API_KEY")
+    api_key = Config.ANTHROPIC_API_KEY
     if not api_key:
         return {
             "error": "Anthropic API key not found. Set ANTHROPIC_API_KEY in .env file.",

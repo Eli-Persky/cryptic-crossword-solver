@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request
-from .utils import get_llm_solution
+from .get_solution import get_llm_solution
 
 def create_app():
     """
