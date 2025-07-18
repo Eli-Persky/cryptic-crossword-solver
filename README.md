@@ -9,6 +9,7 @@ cryptic-crossword-solver
 ├── app
 │   ├── __init__.py
 │   ├── api.py
+│   ├── get_solutions.py
 │   ├── prompts
 │   │   ├── reasoning_prompt.txt
 │   │   └── structuring_prompt.txt
@@ -20,7 +21,6 @@ cryptic-crossword-solver
 │   │   │   └── styles.css
 │   │   └── js
 │   │       └── scripts.js
-│   └── utils.py
 ├── requirements.txt
 ├── config.py
 ├── run.py
