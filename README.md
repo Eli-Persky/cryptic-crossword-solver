@@ -61,7 +61,3 @@ cryptic-crossword-solver
 ## LLM API Integration
 
 This application utilizes an LLM API to process and generate solutions for the crossword clues. Ensure you have the necessary API access and credentials configured in `config.py`.
-
-## License
-
-This project is licensed under the MIT License. See the LICENSE file for more details.
