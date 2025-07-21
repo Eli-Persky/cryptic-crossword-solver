@@ -4,10 +4,27 @@ import json
 import time
 from config import Config
 from app.schemas import OPENAI_FUNCTION_SCHEMAS, ANTHROPIC_TOOL_SCHEMAS, CROSSWORD_SOLUTION_SCHEMA
+from app.langgraph_solver import CrypticCrosswordSolver
+
 
 # Global variables
 LAST_API_CALL = 0  # Timestamp of the last API call
 API_RATE_LIMIT = Config.API_RATE_LIMIT  # Rate limit in seconds
+
+# Initialize the LangGraph solver if available
+if Config.API_PROVIDER.lower() == "openai":
+    try:
+        openai_key = os.getenv("OPENAI_API_KEY")
+        if openai_key:
+            langgraph_solver = CrypticCrosswordSolver(openai_key)
+        else:
+            langgraph_solver = None
+            print("OpenAI API key not found. LangGraph solver disabled.")
+    except Exception as e:
+        langgraph_solver = None
+        print(f"Failed to initialize LangGraph solver: {e}")
+else:
+    langgraph_solver = None
 
 def format_response(data):
     # Function to format the response from the LLM API
@@ -26,7 +43,7 @@ def handle_error(error_message):
 def get_llm_solution(clue):
     """
     Send a cryptic crossword clue to an LLM API and return the solution.
-    Rate-limited to one request per 5 seconds when not in test mode.
+    Now uses LangGraph-based solver if available.
     
     :param clue: The cryptic crossword clue as a string.
     :return: The solution string or an error message.
@@ -37,7 +54,15 @@ def get_llm_solution(clue):
     if test_mode:
         return get_dummy_solution(clue)
     
-    # Rate limiting logic
+    # Use LangGraph solver if available
+    if langgraph_solver:
+        try:
+            return langgraph_solver.solve(clue)
+        except Exception as e:
+            print(f"LangGraph solver failed: {e}")
+            # Fall back to traditional approach
+    
+    # Rate limiting logic for traditional approach
     global LAST_API_CALL
     current_time = time.time()
     time_since_last_call = current_time - LAST_API_CALL
@@ -119,6 +144,7 @@ def get_dummy_solution(clue):
 def load_prompt_template(prompt_type="reasoning"):
     """Load prompt template from file."""
     try:
+        prompt_path = ""
         if prompt_type == "reasoning":
             prompt_path = os.path.join(os.path.dirname(__file__), 'prompts', 'reasoning_prompt.txt')
         elif prompt_type == "structuring":
