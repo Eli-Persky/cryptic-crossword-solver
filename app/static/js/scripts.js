@@ -18,11 +18,6 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (!clue) return;
 
-        // Append length to clue if provided
-        if (solutionLength && solutionLength >= 3) {
-            clue += ` (${solutionLength})`;
-        }
-
         showLoading();
         hideResults();
 
@@ -32,13 +27,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ clue: clue }),
+                body: JSON.stringify({ clue: clue, length: solutionLength })
             });
 
             const data = await response.json();
 
             if (response.ok) {
-                // Pass both the formatted clue (with length) and original clue for display
+                // Pass both the clue and original clue for display
                 displaySolution(clue, clueInput.value.trim(), data.solution);
             } else {
                 displayError(data.error || 'Error retrieving solution');

@@ -1,151 +1,54 @@
 """
 LangGraph-based cryptic crossword solver with recurrent analysis.
 """
-import os
-import re
-import itertools
-from typing import Dict, List, Optional, TypedDict, Annotated
+from tkinter import Image
+from typing import Dict, List, Optional, TypedDict, Annotated, cast
 from dataclasses import dataclass
+import random
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_core.tools import tool
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 
-@dataclass
-class WordAnalysis:
+from .tools import generate_anagrams, get_definitions, find_hidden_words, reverse_word, check_given_letters
+
+class WordPlayComponent(TypedDict):
     """Analysis of a word or phrase in the clue."""
     text: str
     start_pos: int
     end_pos: int
     role: str  # 'definition', 'indicator', 'target', 'synonym', 'unknown'
-    wordplay_type: Optional[str] = None  # 'anagram', 'container', etc.
-    confidence: float = 0.0
+    wordplay_type: str  # 'anagram', 'container', etc.
+    description: str  # Additional description of the role
 
-@dataclass
-class SolutionAttempt:
+class SolutionAttempt(TypedDict):
     """A single attempt at solving the clue."""
     solution: str
     definition_part: str
-    wordplay_analysis: List[WordAnalysis]
-    verification_score: float
-    reasoning: str
+    wordplay_analysis: List[WordPlayComponent]
+
+class CurrentAttemptState(TypedDict):
+    """State of the current attempt at solving the clue."""
+    solution_attempt: Optional[SolutionAttempt]
+    current_component: Optional[WordPlayComponent] # The component currently being analysed
+    remaining_word_idxs: List[int]
+    messages: Annotated[list, add_messages]
 
 class SolverState(TypedDict):
     """State for the LangGraph solver."""
     clue: str
+    clue_words: List[str]
     target_length: Optional[int]
-    word_analyses: List[WordAnalysis]
+    given_letters: dict[int, str]
+    word_analyses: List[WordPlayComponent]
     solution_attempts: List[SolutionAttempt]
-    current_attempt: Optional[SolutionAttempt]
+    current_attempt: Optional[CurrentAttemptState]
     iteration_count: int
     max_iterations: int
     final_solution: Optional[SolutionAttempt]
-    messages: Annotated[list, add_messages]
-
-# Tools for the agent
-@tool
-def generate_anagrams(text: str, target_length: Optional[int] = None) -> List[str]:
-    """Generate all possible anagrams of the given text."""
-    # Remove spaces and convert to lowercase
-    letters = ''.join(text.lower().split())
-    
-    # If target_length is specified, only generate anagrams of that length
-    if target_length:
-        if len(letters) != target_length:
-            return []
-    
-    # Generate permutations - simplified approach without dictionary validation
-    # This will be enhanced when dictionary API is added
-    anagrams = []
-    
-    # For longer words, only generate a subset to avoid too many permutations
-    max_perms = 100 if len(letters) > 6 else 500
-    
-    count = 0
-    for perm in itertools.permutations(letters):
-        if count >= max_perms:
-            break
-        word = ''.join(perm)
-        # Basic filtering - avoid obviously invalid combinations
-        if not re.search(r'[bcdfghjklmnpqrstvwxyz]{4,}', word) and word.upper() not in anagrams:
-            anagrams.append(word.upper())
-        count += 1
-    
-    return anagrams[:20]  # Limit results
-
-@tool
-def check_word_validity(word: str) -> bool:
-    """Check if a word is valid - placeholder for dictionary API."""
-    # Simplified check - will be replaced with proper dictionary API
-    return True
-
-@tool
-def find_synonyms(word: str) -> List[str]:
-    """Find potential synonyms for a word (simplified implementation)."""
-    # This is a simplified version - in practice you'd use a proper thesaurus API
-    synonym_map = {
-        'big': ['large', 'huge', 'massive', 'enormous'],
-        'small': ['tiny', 'little', 'mini', 'minute'],
-        'fast': ['quick', 'rapid', 'swift', 'speedy'],
-        'slow': ['sluggish', 'gradual', 'leisurely'],
-        'happy': ['glad', 'joyful', 'cheerful', 'pleased'],
-        'sad': ['unhappy', 'gloomy', 'sorrowful', 'melancholy'],
-        # Add more as needed
-    }
-    return synonym_map.get(word.lower(), [])
-
-@tool
-def find_hidden_words(phrase: str, target_length: Optional[int] = None) -> List[str]:
-    """Find words hidden within a phrase."""
-    # Remove spaces and punctuation
-    clean_phrase = re.sub(r'[^a-zA-Z]', '', phrase.lower())
-    
-    hidden_words = []
-    for i in range(len(clean_phrase)):
-        for j in range(i + 3, len(clean_phrase) + 1):  # Minimum 3 letters
-            substring = clean_phrase[i:j]
-            if target_length and len(substring) != target_length:
-                continue
-            # Basic filtering - will be enhanced with dictionary API
-            if len(substring) >= 3 and len(substring) <= 15:
-                # Avoid substrings with too many consonants in a row
-                if not re.search(r'[bcdfghjklmnpqrstvwxyz]{4,}', substring):
-                    hidden_words.append(substring.upper())
-                    if len(hidden_words) >= 10:  # Limit results
-                        break
-    
-    return hidden_words
-
-@tool
-def reverse_word(word: str) -> str:
-    """Reverse a word."""
-    return word[::-1].upper()
-
-@tool
-def lookup_word_definition(word: str) -> Dict[str, str]:
-    """Look up the definition of a word - placeholder for dictionary API."""
-    # Placeholder implementation - will be replaced with proper dictionary API
-    basic_definitions = {
-        'cat': 'a small domesticated carnivorous mammal',
-        'dog': 'a domesticated carnivorous mammal',
-        'house': 'a building for human habitation',
-        'tree': 'a woody perennial plant',
-        'water': 'a colorless, transparent, odorless liquid',
-        'fire': 'combustion or burning',
-        'earth': 'the planet on which we live',
-        'air': 'the invisible gaseous substance',
-        'sun': 'the star around which the earth orbits',
-        'moon': 'the natural satellite of the earth'
-    }
-    
-    return {
-        'word': word,
-        'definition': basic_definitions.get(word.lower(), 'Definition not available'),
-        'part_of_speech': 'noun'  # Simplified
-    }
+    solved: bool
 
 class CrypticCrosswordSolver:
     """LangGraph-based cryptic crossword solver."""
@@ -160,279 +63,215 @@ class CrypticCrosswordSolver:
         # Create tools node
         self.tools = [
             generate_anagrams,
-            check_word_validity,
-            find_synonyms,
+            get_definitions,
             find_hidden_words,
             reverse_word,
-            lookup_word_definition
+            # Lookup synonyms
         ]
         self.tool_node = ToolNode(self.tools)
         
         # Build the graph
         self.graph = self._build_graph()
+        return
+
+    def save_graph(self):
+        """Save the LangGraph state graph as png."""
+        if self.graph:
+            self.graph.get_graph().draw_mermaid_png(output_file_path="graph.png")
     
     def _build_graph(self):
         """Build the LangGraph state graph."""
         workflow = StateGraph(SolverState)
         
         # Add nodes
-        workflow.add_node("analyze_clue", self._analyze_clue)
-        workflow.add_node("generate_solution", self._generate_solution)
-        workflow.add_node("verify_solution", self._verify_solution)
-        workflow.add_node("tools", self.tool_node)
-        workflow.add_node("decide_next", self._decide_next_action)
-        workflow.add_node("finalize", self._finalize_solution)
+        workflow.add_node("generate_solution", self._generate_solution) # Generate an attempt at a solution, one word r phrase at a time
+        workflow.add_node("decide_continue_attempt", lambda state: state)
+        workflow.add_node("analyse_component", self._analyse_component) # The selected word or phrase is assigned a role and wordplay type
+        workflow.add_node("verify_solution", self._verify_solution) # Verify the proposed solution
+        workflow.add_node("decide_next", lambda state: state) # Decide if solved, try another attempt or give up
+        workflow.add_node("tools", self.tool_node) # Use tools to generate anagrams, definitions, etc.
+        workflow.add_node("finalize", lambda state: state)
         
         # Set entry point
-        workflow.set_entry_point("analyze_clue")
+        workflow.set_entry_point("generate_solution")
         
         # Add edges
-        workflow.add_edge("analyze_clue", "generate_solution")
-        workflow.add_edge("generate_solution", "tools")
+        workflow.add_edge("generate_solution", "decide_continue_attempt")
+        workflow.add_conditional_edges(
+            "decide_continue_attempt",
+            self._decide_continue_attempt,
+            {
+                "continue": "analyse_component",  # Recurrent edge
+                "stop": "verify_solution"
+            }
+        )
+
+        workflow.add_edge("analyse_component", "tools")
+        workflow.add_edge("tools", "analyse_component")
+        workflow.add_edge("analyse_component", "generate_solution")
+
+        workflow.add_edge("verify_solution", "tools")
         workflow.add_edge("tools", "verify_solution")
         workflow.add_edge("verify_solution", "decide_next")
         
-        # Conditional edges from decide_next
         workflow.add_conditional_edges(
             "decide_next",
-            self._should_continue,
+            self._decide_next,
             {
-                "continue": "analyze_clue",  # Recurrent edge
-                "finalize": "finalize",
-                "end": END
+                "stop": "finalize",
+                "continue": "generate_solution"  # Recurrent edge
             }
         )
-        
+
         workflow.add_edge("finalize", END)
         
         return workflow.compile()
     
-    def _analyze_clue(self, state: SolverState) -> SolverState:
-        """Analyze the clue and identify word roles."""
-        clue = state["clue"]
-        iteration = state["iteration_count"]
-        
-        system_prompt = """You are an expert cryptic crossword solver. Analyze the given clue and identify the role of each word or phrase.
+    def _generate_solution(self, state: SolverState) -> SolverState:
+        """Generate a solution attempt based on current analysis."""
+        # Select words or sets of words from the clue to be sent on for analysis and populate current_component_to_analyse
+        clue = state["clue_words"]
 
-        Roles to identify:
-        - definition: The straightforward definition (usually at start or end)
-        - indicator: Words that signal wordplay (anagram, container, reversal, etc.)
-        - target: Words that are operated on by indicators
-        - synonym: Words that need to be replaced by synonyms
-        - link: Connector words
-        
-        Wordplay types:
-        - anagram: Letters rearranged (indicators: mixed, confused, broken, etc.)
-        - container: One word contains another (indicators: in, inside, around, etc.)
-        - reversal: Word backwards (indicators: back, reverse, returns, etc.)
-        - hidden: Word hidden in phrase (indicators: some, part of, within, etc.)
-        - deletion: Remove letters (indicators: without, losing, drops, etc.)
-        - homophone: Sounds like (indicators: sounds, heard, spoken, etc.)
-        """
-        
-        human_prompt = f"""Clue: "{clue}"
-        Target length: {state.get('target_length', 'unknown')}
-        Iteration: {iteration + 1}
-        
-        Analyze each word/phrase and suggest their roles. Consider multiple interpretations if this is not the first iteration."""
-        
-        response = self.llm.invoke([
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=human_prompt)
-        ])
-        
-        # Parse the response to extract word analyses (simplified)
-        # In a full implementation, you'd use structured output
-        word_analyses = self._parse_analysis_response(response.content, clue)
-        
-        state["word_analyses"] = word_analyses
-        state["messages"].append(response)
+        if state["current_attempt"] is None:
+            # Initialize the current attempt state
+            state["current_attempt"] = CurrentAttemptState(
+                solution_attempt=None,
+                current_component=None,
+                remaining_word_idxs=list(range(len(clue))),
+                messages=[]
+            )
+
+        attempt_data = state["current_attempt"]
+        if attempt_data["solution_attempt"] is None:
+            # Create a new solution attempt
+            attempt_data["solution_attempt"] = SolutionAttempt(
+                solution="",
+                definition_part="",
+                wordplay_analysis=[]
+            )
+        attempt = attempt_data["solution_attempt"]
+
+        if not attempt_data["remaining_word_idxs"]:
+            attempt_data["current_component"] = None
+            return state
+
+        component_idx = random.choice(attempt_data["remaining_word_idxs"]) # TODO: Allow multiword selection
+        word_to_analyse = clue[component_idx]
+
+        attempt["wordplay_analysis"].append(
+            WordPlayComponent(
+                text=word_to_analyse,
+                start_pos=component_idx,
+                end_pos=component_idx,
+                role="",
+                wordplay_type="",
+                description=""
+            )
+        )
         
         return state
     
-    def _generate_solution(self, state: SolverState) -> SolverState:
-        """Generate a solution attempt based on current analysis."""
-        clue = state["clue"]
-        analyses = state["word_analyses"]
-        target_length = state.get("target_length")
+    def _decide_continue_attempt(self, state: SolverState) -> str:
+        """Check if the attempt is finished."""
+        current_attempt = state["current_attempt"]
+       
+        if current_attempt is None or current_attempt["current_component"] is None:
+            return "stop"  # No component to analyse
+        else:
+            return "continue"  # Continue with the current component
+    
+    def _analyse_component(self, state: SolverState) -> SolverState:
+        """Determine the role and worplay type of the selected word or phrase and finish populating current_component"""
+         # This is where the magic happens
+
+         # Give LLM context including clue, solved components, ideas relating to the current component
         
-        system_prompt = """Based on the word analysis, generate a specific solution attempt. 
-        Use the available tools to check anagrams, synonyms, hidden words, etc.
-        
-        Be specific about which words you're using and how the wordplay works."""
-        
-        human_prompt = f"""Clue: "{clue}"
-        Target length: {target_length}
-        Word analyses: {[f"{a.text}: {a.role}" for a in analyses]}
-        
-        Generate a specific solution using the tools available."""
-        
-        response = self.llm.invoke([
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=human_prompt)
-        ])
-        
-        # The LLM should call tools here, which will be handled by the tools node
-        state["messages"].append(response)
-        
+        # TODO: Make LLM return structured output to populate the current_component
+
+        # Add component to the current attempt and the state for future reference
         return state
     
     def _verify_solution(self, state: SolverState) -> SolverState:
         """Verify the proposed solution."""
-        # Extract the most recent message to see if tools were called
-        messages = state.get("messages", [])
-        tool_results = []
+        if not state["current_attempt"]:
+            state["solved"] = False
+            return state
+        solution = state["current_attempt"]["solution_attempt"]
         
-        # Initialize defaults
-        solution_candidate = "UNKNOWN"
-        reasoning = "Based on current analysis"
+        # Objective tests
+        if not solution or not solution["solution"]:
+            state["solved"] = False
+            return state
         
-        # Look for tool calls in recent messages
-        if messages:
-            latest_message = messages[-1]
-            if hasattr(latest_message, 'tool_calls') and latest_message.tool_calls:
-                # Process tool results to create a solution attempt
-                reasoning = "Based on tool analysis"
-                
-                for tool_call in latest_message.tool_calls:
-                    if tool_call['name'] == 'generate_anagrams' and tool_call.get('result'):
-                        anagrams = tool_call['result']
-                        if anagrams:
-                            solution_candidate = anagrams[0]  # Take first anagram
-                            reasoning += f" - Found anagram: {solution_candidate}"
+        state["solution_attempts"].append(solution)
+
+        if state["target_length"] and len(solution["solution"]) != state["target_length"]:
+            state["solved"] = False
+            return state
+        if not check_given_letters(solution["solution"], state["given_letters"]):
+            state["solved"] = False
+            return state
         
-        # Create a solution attempt based on current analysis
-        attempt = SolutionAttempt(
-            solution=solution_candidate,
-            definition_part="Identified definition part",
-            wordplay_analysis=state["word_analyses"],
-            verification_score=0.6,  # Base score - will be improved with better validation
-            reasoning=f"Iteration {state['iteration_count'] + 1}: {reasoning}"
-        )
+        wordplay_analysis = solution["wordplay_analysis"]
+        for component in wordplay_analysis:
+            # TODO: Test objective use of each wordplay component in constructing the solution
+            pass
         
-        state["current_attempt"] = attempt
-        state["solution_attempts"].append(attempt)
+        # Test definition
+        definition = solution["definition_part"]
+        dictionary_meanings = get_definitions(solution["solution"])
+        if not definition or not dictionary_meanings:
+            state["solved"] = False
+            return state
         
+        # TODO: Call LLM to verify if the definition is a semantic match for one of the solution meanings
+        
+        # Test validity of wordplay
+        wordplay_analysis = solution["wordplay_analysis"]
+        for component in wordplay_analysis:
+            # TODO: Call LLM to verify if the wordplay selection is valid, 
+            pass
+        state["solved"] = True  # If all tests pass, the solution is considered solved
+        state["final_solution"] = solution
         return state
     
-    def _decide_next_action(self, state: SolverState) -> SolverState:
+    def _decide_next(self, state: SolverState) -> str:
+        """Check if the solution is solved."""
+
+        if state["solved"]:
+            return "stop"
+        else:
+            give_up = self.decide_give_up(state)
+            if give_up:
+                return "stop"
+            else:
+                return "continue"
+            
+    def decide_give_up(self, state: SolverState) -> bool:
         """Decide whether to continue iterating or finalize."""
+        # TODO: add better logic for deciding to give up
         state["iteration_count"] += 1
-        return state
+        return state["iteration_count"] >= state["max_iterations"]
     
-    def _should_continue(self, state: SolverState) -> str:
-        """Determine the next action based on current state."""
-        current_attempt = state.get("current_attempt")
-        iteration_count = state["iteration_count"]
-        max_iterations = state["max_iterations"]
-        
-        # If we have a high-confidence solution, finalize
-        if current_attempt and current_attempt.verification_score > 0.8:
-            return "finalize"
-        
-        # If we've reached max iterations, end
-        if iteration_count >= max_iterations:
-            return "finalize"
-        
-        # Otherwise, continue iterating
-        return "continue"
-    
-    def _finalize_solution(self, state: SolverState) -> SolverState:
-        """Select the best solution from all attempts."""
-        attempts = state["solution_attempts"]
-        
-        if attempts:
-            # Select the attempt with the highest verification score
-            best_attempt = max(attempts, key=lambda x: x.verification_score)
-            state["final_solution"] = best_attempt
-        
-        return state
-    
-    def _parse_analysis_response(self, response, clue: str) -> List[WordAnalysis]:
-        """Parse the LLM response to extract word analyses."""
-        # This is a simplified implementation
-        # In practice, you'd use structured output or more sophisticated parsing
-        
-        words = clue.split()
-        analyses = []
-        
-        for i, word in enumerate(words):
-            analysis = WordAnalysis(
-                text=word,
-                start_pos=i,
-                end_pos=i,
-                role="unknown",
-                confidence=0.5
-            )
-            analyses.append(analysis)
-        
-        return analyses
-    
-    def solve(self, clue: str, target_length: Optional[int] = None, max_iterations: int = 3) -> Dict:
+    def solve(self, clue: str, given_letters: dict[int, str], target_length: Optional[int] = None, max_iterations: int = 3) -> Dict:
         """Solve a cryptic crossword clue."""
-        # Extract length from clue if present
-        length_match = re.search(r'\((\d+)\)$', clue.strip())
-        if length_match and not target_length:
-            target_length = int(length_match.group(1))
-            clue = re.sub(r'\s*\(\d+\)$', '', clue.strip())
-        
+
         initial_state = SolverState(
             clue=clue,
+            clue_words=clue.split(),
             target_length=target_length,
+            given_letters=given_letters,
             word_analyses=[],
             solution_attempts=[],
             current_attempt=None,
             iteration_count=0,
             max_iterations=max_iterations,
             final_solution=None,
-            messages=[]
+            solved=False
         )
         
         # Run the graph
         final_state = self.graph.invoke(initial_state)
         
         # Convert to the expected output format
-        return self._format_output(final_state)
-    
-    def _format_output(self, state: dict) -> Dict:
-        """Format the output to match the expected schema."""
-        final_solution = state.get("final_solution")
-        
-        if not final_solution:
-            return {
-                "error": "No solution found",
-                "error_code": "NO_SOLUTION"
-            }
-        
-        return {
-            "attempted_solutions": [
-                {
-                    "solution": attempt.solution,
-                    "definition": attempt.definition_part,
-                    "wordplay_components": [
-                        {
-                            "indicator": analysis.text,
-                            "wordplay_type": analysis.wordplay_type or "other",
-                            "target": ""
-                        }
-                        for analysis in attempt.wordplay_analysis
-                        if analysis.role in ["indicator", "target"]
-                    ]
-                }
-                for attempt in state["solution_attempts"][:-1]  # All but the final
-            ],
-            "complete_solution": {
-                "solution": final_solution.solution,
-                "definition": final_solution.definition_part,
-                "wordplay_components": [
-                    {
-                        "indicator": analysis.text,
-                        "wordplay_type": analysis.wordplay_type or "other",
-                        "target": ""
-                    }
-                    for analysis in final_solution.wordplay_analysis
-                    if analysis.role in ["indicator", "target"]
-                ]
-            },
-            "reasoning_analysis": final_solution.reasoning
-        }
+        return final_state

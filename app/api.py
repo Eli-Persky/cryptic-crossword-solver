@@ -7,12 +7,16 @@ api_blueprint = Blueprint('api', __name__)
 @api_blueprint.route('/api/submit_clue', methods=['POST'])
 def submit_clue():
     data = request.json
+    if data is None:
+        return jsonify({'error': 'Invalid JSON data'}), 400
+    
     clue = data.get('clue')
+    length = data.get('length', None)
     
     if not clue:
         return jsonify({'error': 'No clue provided'}), 400
     
-    solution = get_llm_solution(clue)
+    solution = get_llm_solution(clue, {}, length)
     
     # Handle both structured responses and error responses
     if isinstance(solution, dict):

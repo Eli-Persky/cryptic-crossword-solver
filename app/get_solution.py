@@ -40,7 +40,7 @@ def handle_error(error_message):
         "message": error_message
     }
 
-def get_llm_solution(clue):
+def get_llm_solution(clue, givens, length=None):
     """
     Send a cryptic crossword clue to an LLM API and return the solution.
     Now uses LangGraph-based solver if available.
@@ -57,7 +57,7 @@ def get_llm_solution(clue):
     # Use LangGraph solver if available
     if langgraph_solver:
         try:
-            return langgraph_solver.solve(clue)
+            return langgraph_solver.solve(clue, givens, length)
         except Exception as e:
             print(f"LangGraph solver failed: {e}")
             # Fall back to traditional approach
