@@ -6,18 +6,10 @@ from .utils import check_given_letters
 
 # Tools for the agent
 @tool
-def generate_anagrams(text: str, target_length: Optional[int] = None) -> List[str]:
+def generate_anagrams(text: str) -> List[str]:
     """Generate all possible anagrams of the given text."""
     # Convert to lowercase, and remove non-letter characters
     letters = re.sub(r'[^a-zA-Z]', '', text.lower())
-    
-    # If target_length is specified, only generate anagrams of that length
-    if target_length:
-        if len(letters) != target_length:
-            return []
-    
-    # Generate permutations - simplified approach without dictionary validation
-    # This will be enhanced when dictionary API is added
     anagrams = []
     
     # For longer words, only generate a subset to avoid too many permutations
@@ -38,7 +30,7 @@ def generate_anagrams(text: str, target_length: Optional[int] = None) -> List[st
     return anagrams
 
 @tool
-def get_definitions(word: str) -> List[str]:
+def get_meanings(word: str) -> List[str]:
     """Retrieve all meanings of a word. Used to check if a word has an appropriate meaning for its use in the solution, either as a synonym, an indicator or as the solution definition."""
     # Will be replaced with proper dictionary API
     return []
