@@ -10,29 +10,6 @@ This project is a web application designed to solve cryptic crossword clues usin
 ![example screenshot 1](https://github.com/Eli-Persky/cryptic-crossword-solver/blob/main/screenshot1.png)
 ![example screenshot 2](https://github.com/Eli-Persky/cryptic-crossword-solver/blob/main/screenshot2.png)
 
-## Project Structure
-
-```
-cryptic-crossword-solver
-├── app
-│   ├── __init__.py
-│   ├── api.py
-│   ├── get_solutions.py
-│   ├── prompts
-│   │   ├── reasoning_prompt.txt
-│   │   └── structuring_prompt.txt
-│   ├── schemas.py
-│   ├── templates
-│   │   └── index.html
-│   ├── static
-│   │   ├── css
-│   │   │   └── styles.css
-│   │   └── js
-│   │       └── scripts.js
-├── requirements.txt
-├── config.py
-├── run.py
-└── README.md
 ```
 
 ## Installation
