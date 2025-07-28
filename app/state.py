@@ -36,8 +36,7 @@ class SolverState(TypedDict):
     word_analyses: Dict[Tuple[int, int], List[WordPlayComponent]]
     solution_attempts: List[SolutionAttempt]
     current_attempt: Optional[CurrentAttemptState]
-    iteration_count: int
-    max_iterations: int
+    max_attempts: int
     final_solution: Optional[SolutionAttempt]
     solved: bool
     stage: str

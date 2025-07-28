@@ -1,8 +1,9 @@
 from typing import Dict, List, Optional, TypedDict, Annotated
 import re
+import requests
 import itertools
 from langchain_core.tools import tool
-from .utils import check_given_letters
+from .utils import check_given_letters, clean_wiktionary_string
 
 # Tools for the agent
 @tool
@@ -32,8 +33,22 @@ def generate_anagrams(text: str) -> List[str]:
 @tool
 def get_meanings(word: str) -> List[str]:
     """Retrieve all meanings of a word. Used to check if a word has an appropriate meaning for its use in the solution, either as a synonym, an indicator or as the solution definition."""
-    # Will be replaced with proper dictionary API
-    return []
+    endpoint = 'https://en.wiktionary.org/api/rest_v1/page/definition'
+    url = f"{endpoint}/{word}"
+    headers = {"origin": "test"}
+    response = requests.get(url, headers=headers)
+    if response.status_code != 200:
+        print(f"Error: {response.status_code}")
+        return []
+    res = response.json()
+    output = []
+    if 'en' in res:
+        for meaning in res['en']:
+            for definition in meaning.get('definitions', []):
+                if 'definition' in definition:
+                    filtered_definition = clean_wiktionary_string(definition['definition'])
+                    output.append(filtered_definition)
+    return output
 
 @tool
 def find_hidden_words(phrase: str, target_length: int) -> List[str]:

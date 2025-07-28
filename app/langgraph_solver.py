@@ -189,7 +189,6 @@ class CrypticCrosswordSolver:
     def _decide_continue_attempt(self, state: SolverState) -> str:
         """Check if the attempt is finished."""
         #  TODO: Need more robust way to decide to end attempt even if not all words are solved
-        # e.g. prepositions, articles need not be solved
         current_attempt = state["current_attempt"]
        
         if current_attempt is None or current_attempt["current_component"] is None:
@@ -197,6 +196,10 @@ class CrypticCrosswordSolver:
         
         if not current_attempt["remaining_word_idxs"]:
             return "stop"
+        
+        for idx in current_attempt["remaining_word_idxs"]:
+            if state["clue_words"][idx].strip().lower() not in ["a", "an", "the", "of", "in", "on", "at", "to", "for", "with", "by", "is", "that's"]:
+                return "continue"
         
         return "continue"  # Continue with the current component
     
@@ -410,7 +413,7 @@ class CrypticCrosswordSolver:
             # Parse the response
             target_idx = None
             target_text = ""
-            target_role = "target"
+            target_role = ""
             result = None
             description = ""
             
@@ -472,7 +475,7 @@ class CrypticCrosswordSolver:
         solution = state["current_attempt"]["solution_attempt"]
         
         # Objective tests
-        if not solution or not solution["solution"]:
+        if not solution or not solution["solution"] or not solution["definition_part"]:
             state["solved"] = False
             return state
         state["stage"] = "verify_solution"
@@ -523,8 +526,7 @@ class CrypticCrosswordSolver:
     def decide_give_up(self, state: SolverState) -> bool:
         """Decide whether to continue iterating or finalize."""
         # TODO: add better logic for deciding to give up
-        state["iteration_count"] += 1
-        return state["iteration_count"] >= state["max_iterations"]
+        return len(state["solution_attempts"]) >= state["max_attempts"]
     
     def solve(self, clue: str, given_letters: dict[int, str], target_length: Optional[int] = None, max_iterations: int = 3) -> Dict:
         """Solve a cryptic crossword clue."""
@@ -534,14 +536,13 @@ class CrypticCrosswordSolver:
             clue_words=clue.split(),
             target_length=target_length,
             given_letters=given_letters,
-
-
-
-
-
-
-
-            solved=False,            final_solution=None,            max_iterations=max_iterations,            iteration_count=0,            current_attempt=None,            solution_attempts=[],            word_analyses={},            stage="initial"
+            solved=False,
+            final_solution=None,
+            max_attempts=max_iterations,
+            current_attempt=None,
+            solution_attempts=[],
+            word_analyses={},
+            stage="initial"
         )
         
         # Run the graph

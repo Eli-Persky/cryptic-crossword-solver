@@ -14,15 +14,22 @@ def parse_given_letters(s):
 def main():
     openai_key = Config.OPENAI_API_KEY
 
+    if not openai_key:
+        print("Error: OpenAI API key not found. Please set the API key in the Config class.")
+        return
+
     solver = CrypticCrosswordSolver(openai_key)
     
     if save_image:
         solver.save_graph()
         return
     
-    clue = input("Enter cryptic crossword clue: ").strip()
-    length = input("Enter solution length (optional): ").strip()
-    given = input("Enter given letters (e.g. 1:A,3:E) (optional): ").strip()
+    #clue = input("Enter cryptic crossword clue: ").strip()
+    clue = "Initially irritated, raised uproar about drink that's tasteless"
+    #length = input("Enter solution length (optional): ").strip()
+    length = "7"
+    #given = input("Enter given letters (e.g. 1:A,3:E) (optional): ").strip()
+    given = ""
     target_length = int(length) if length.isdigit() else None
     given_letters = parse_given_letters(given) if given else {}
     
