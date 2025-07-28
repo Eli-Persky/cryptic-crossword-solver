@@ -10,7 +10,7 @@ class WordPlayComponent(TypedDict):
     wordplay_type: str  # 'anagram', 'container', etc.
     description: str  # Additional description of the role
     result: Optional[str]  # Result of the wordplay, if applicable
-    targeted_by: Optional[Tuple[int, int]]  # If this component's role is target, which component is the indicator
+    targeted_by: Optional['WordPlayComponent']  # If this component's role is target, which component is the indicator
     messages: Annotated[list, add_messages]
 
 
@@ -40,3 +40,4 @@ class SolverState(TypedDict):
     max_iterations: int
     final_solution: Optional[SolutionAttempt]
     solved: bool
+    stage: str

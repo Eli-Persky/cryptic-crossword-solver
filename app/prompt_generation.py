@@ -105,3 +105,85 @@ def generate_analyse_component_prompt(state: SolverState, tool_results: List[Dic
         full_prompt += f"\n\n{tool_context}\n\nBased on these tool results, provide your final analysis:"
     
     return full_prompt
+
+
+def generate_find_target_prompt(state: SolverState, indicator_component: WordPlayComponent, tool_results: List[Dict]) -> str:
+     # Get available target candidates from remaining words and synonyms
+     # TODO: Tidy this up and add conditional prompt sentences based on context
+    current_attempt = state["current_attempt"]
+    if not current_attempt:
+        return ""
+    solution_attempt = current_attempt["solution_attempt"]
+    if not solution_attempt:
+        return ""
+    
+    clue_words = state["clue_words"]
+    possible_target_idxs = current_attempt["possible_target_idxs"]
+    
+    # Build candidate text for LLM analysis
+    candidates = []
+    for idx in possible_target_idxs:
+        if idx < len(clue_words):
+            candidates.append(f"{idx}: {clue_words[idx]}")
+    
+    # Create prompt for target identification
+    wordplay_type = indicator_component["wordplay_type"]
+    indicator_text = indicator_component["text"]
+    
+    context_parts = []
+
+    if tool_results:
+        context_parts.append("Tool Results:")
+        for result in tool_results:
+            context_parts.append(f"  {result['tool_name']}: {result['result']}")
+
+    chosen_solution = solution_attempt["solution"]
+    definition = solution_attempt["definition_part"]
+    target_length = state["target_length"]
+    given_letters = state["given_letters"]
+    if chosen_solution and definition:
+        context_parts.append(f"Solution: '{chosen_solution}'")
+        context_parts.append(f"Definition: '{definition}'")
+        solution_in_context = True
+    else:
+        if target_length:
+            context_parts.append(f"Target solution length: {target_length} letters")
+            length_in_context = True
+        if given_letters:
+            given_str = ", ".join([f"position {pos}: '{letter}'" for pos, letter in given_letters.items()])
+            context_parts.append(f"Given letters: {given_str}")
+            givens_in_context = True
+                
+    # Add context about other analyzed components
+    if solution_attempt and solution_attempt["wordplay_analysis"]:
+        other_components = [comp for comp in solution_attempt["wordplay_analysis"][:-1] if comp["role"]]
+        if other_components:
+            other_components_in_context = True
+            context_parts.append("Other analyzed components in current attempt:")
+            for comp in other_components:
+                context_parts.append(f"  '{comp['text']}': {comp['role']} ({comp['wordplay_type']})")
+    context = "\n".join(context_parts)
+    prompt = f"""
+You are analyzing a cryptic crossword clue: "{' '.join(clue_words)}"
+
+The word "{indicator_text}" has been identified as an INDICATOR for {wordplay_type} wordplay.
+
+Available target candidates:
+{chr(10).join(candidates)}
+
+{context}
+
+You can use tools to help analyze the candidates (generate anagrams, find meanings, etc.) before making your decision.
+
+If you need more information, call the appropriate tools. Otherwise, identify the target and provide your analysis.
+
+When ready to provide your final answer, respond in this exact format:
+Target Index: [number]
+Target Text: [the actual word/phrase]
+Role: [target/synonym]
+Wordplay Type: {wordplay_type}
+Result: [result of applying the wordplay]
+Description: [brief explanation of the wordplay operation]
+"""
+    
+    return prompt

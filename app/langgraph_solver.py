@@ -11,7 +11,7 @@ from langgraph.prebuilt import ToolNode
 
 from .tools import generate_anagrams, get_meanings, find_hidden_words, reverse_word, check_given_letters
 from .state import SolverState, CurrentAttemptState, SolutionAttempt, WordPlayComponent
-from .prompt_generation import generate_analyse_component_prompt
+from .prompt_generation import generate_analyse_component_prompt, generate_find_target_prompt
 
 class CrypticCrosswordSolver:
     """LangGraph-based cryptic crossword solver."""
@@ -26,8 +26,7 @@ class CrypticCrosswordSolver:
             reverse_word,
             # Lookup synonyms
         ]
-        self.tool_node_analyse = ToolNode(self.tools)
-        self.tool_node_verify = ToolNode(self.tools)
+        self.tool_node = ToolNode(self.tools)
 
         # Create the LLM with tools bound
         self.llm = ChatOpenAI(
@@ -50,18 +49,19 @@ class CrypticCrosswordSolver:
         workflow = StateGraph(SolverState)
         
         # Add nodes
-        workflow.add_node("generate_solution", self._generate_solution) # Generate an attempt at a solution, one word r phrase at a time
+        workflow.add_node("generate_solution", self._generate_solution)
         workflow.add_node("decide_continue_attempt", lambda state: state)
-        workflow.add_node("analyse_component", self._analyse_component) # The selected word or phrase is assigned a role and wordplay type
-        workflow.add_node("decide_use_tools_a", lambda state: state) # Decide whether to use tools or skip to target search
-        workflow.add_node("decide_search_for_target", lambda state: state) # Decide if the current component needs a target to be found in the clue
-        workflow.add_node("find_target", self._find_target) # Find the target for the current component
-        workflow.add_node("verify_solution", self._verify_solution) # Verify the proposed solution
-        workflow.add_node("decide_use_tools_v", lambda state: state) # Decide whether to use tools for verification
-        workflow.add_node("decide_next", lambda state: state) # Decide if solved, try another attempt or give up
-        workflow.add_node("tools_analyse", self.tool_node_analyse) # Use tools to generate anagrams, definitions, etc.
-        workflow.add_node("tools_verify", self.tool_node_verify) # Use tools to verify solutions
+        workflow.add_node("analyse_component", self._analyse_component)
+        workflow.add_node("decide_use_tools_a", lambda state: state)
+        workflow.add_node("decide_search_for_target", lambda state: state)
+        workflow.add_node("find_target", self._find_target)
+        workflow.add_node("verify_solution", self._verify_solution)
+        workflow.add_node("decide_use_tools_v", lambda state: state)
+        workflow.add_node("decide_next", lambda state: state)
+        workflow.add_node("tools", self.tool_node)
+        workflow.add_node("return_from_tools", lambda state: state)
         workflow.add_node("finalize", lambda state: state)
+        workflow.add_node("decide_use_tools_f", lambda state: state)
         
         # Set entry point
         workflow.set_entry_point("generate_solution")
@@ -79,13 +79,12 @@ class CrypticCrosswordSolver:
         workflow.add_edge("analyse_component", "decide_use_tools_a")
         workflow.add_conditional_edges(
             "decide_use_tools_a",
-            self._decide_use_tools_a,
+            self._decide_use_tools,
             {
-                "use_tools": "tools_analyse",
+                "use_tools": "tools",
                 "skip_tools": "decide_search_for_target"
             }
         )
-        workflow.add_edge("tools_analyse", "analyse_component")
 
         workflow.add_conditional_edges(
             "decide_search_for_target",
@@ -96,18 +95,36 @@ class CrypticCrosswordSolver:
             }
         )
 
-        workflow.add_edge("find_target", "generate_solution")
-
+        workflow.add_edge("find_target", "decide_use_tools_f")
+        workflow.add_conditional_edges(
+            "decide_use_tools_f",
+            self._decide_use_tools,
+            {
+                "use_tools": "tools",
+                "skip_tools": "generate_solution"
+            }
+        )
+        
         workflow.add_edge("verify_solution", "decide_use_tools_v")
         workflow.add_conditional_edges(
             "decide_use_tools_v",
-            self._decide_use_tools_v,
+            self._decide_use_tools,
             {
-                "use_tools": "tools_verify",
+                "use_tools": "tools",
                 "skip_tools": "decide_next"
             }
         )
-        workflow.add_edge("tools_verify", "verify_solution")
+        workflow.add_conditional_edges(
+            "return_from_tools",
+            lambda state: state["stage"],
+            {
+                "analyse_component": "analyse_component",
+                "find_target": "find_target",
+                "verify_solution": "verify_solution"
+            }
+        )
+        
+        workflow.add_edge("tools", "return_from_tools")
         
         workflow.add_conditional_edges(
             "decide_next",
@@ -172,6 +189,7 @@ class CrypticCrosswordSolver:
     def _decide_continue_attempt(self, state: SolverState) -> str:
         """Check if the attempt is finished."""
         #  TODO: Need more robust way to decide to end attempt even if not all words are solved
+        # e.g. prepositions, articles need not be solved
         current_attempt = state["current_attempt"]
        
         if current_attempt is None or current_attempt["current_component"] is None:
@@ -192,7 +210,7 @@ class CrypticCrosswordSolver:
         current_component = attempt["current_component"]
         if not solution_attempt or not current_component:
             return state
-
+        state["stage"] = "analyse_component"
         messages = current_component.get("messages", [])
         tool_results = []
         # Check if we have tool results to process
@@ -285,7 +303,7 @@ class CrypticCrosswordSolver:
         
         return state
     
-    def _decide_use_tools_a(self, state: SolverState) -> str:
+    def _decide_use_tools(self, state: SolverState) -> str:
         """Decide whether to use tools in component analysis or skip to target search."""
         current_attempt = state["current_attempt"]
         if not current_attempt or not current_attempt["current_component"]:
@@ -296,17 +314,12 @@ class CrypticCrosswordSolver:
         
         # Check if there are pending tool calls in the messages
         if messages:
-            for msg in messages:
-                if hasattr(msg, 'additional_kwargs') and 'tool_calls' in msg.additional_kwargs:
-                    return "use_tools"
+            msg = messages[-1]
+            if hasattr(msg, 'additional_kwargs') and 'tool_calls' in msg.additional_kwargs:
+                return "use_tools"
         
         return "skip_tools"
     
-    def _decide_use_tools_v(self, state: SolverState) -> str:
-        """Decide whether to use tools in verification."""
-        # TODO: Implement this logic
-        
-        return "skip_tools"
     
     def _decide_search_for_target(self, state: SolverState) -> str:
         """Decide if the current component needs a target to be found in the clue."""
@@ -329,13 +342,125 @@ class CrypticCrosswordSolver:
             return "stop"
         
     def _find_target(self, state: SolverState) -> SolverState:
-        # Take the data from the current component which is an indicator of some worplay type
-        # The LLM must decide which part of the clue is the target for this indicator
-        # It may use any unsolved components or a component which has been designated as a synonym
-        # It may designate a component as a synonym if it is not already
-        # It will replce the current_component with a new one that has the target role and wordplay type equal to the indicator
-        # It must provide the result of applying the wordplay to the target
+        """Find the target component for the current indicator."""
+        current_attempt = state["current_attempt"]
+        if not current_attempt or not current_attempt["current_component"]:
+            return state
+        
+        solution_attempt = current_attempt["solution_attempt"]
+        if not solution_attempt:
+            return state
+        
+        current_component = current_attempt["current_component"]
+        if not current_component or current_component["role"] not in ["indicator", "target"]:
+            return state
+        
+        if current_component["targeted_by"] is not None:
+            indicator_component = current_component["targeted_by"]
+            target_component = current_component
+        else:
+            indicator_component = current_component
+            target_component = WordPlayComponent(
+                text="",
+                start_pos=0,
+                end_pos=0,
+                role="target",
+                wordplay_type=indicator_component["wordplay_type"],
+                targeted_by=indicator_component,
+                result=None,
+                description="",
+                messages=[]
+            )
+            current_attempt["current_component"] = target_component
+        
+        state["stage"] = "find_target"
 
+        # Check if we have tool results to process
+        messages = target_component.get("messages", [])
+        tool_results = []
+        if messages:
+            # Process any tool call results
+            for msg in messages:
+                if hasattr(msg, 'content') and isinstance(msg.content, list):
+                    for content_item in msg.content:
+                        if hasattr(content_item, 'type') and content_item.type == 'tool_result':
+                            tool_results.append({
+                                'tool_name': content_item.name,
+                                'result': content_item.content
+                            })
+
+        prompt = generate_find_target_prompt(state, indicator_component, tool_results)
+        if not prompt:
+            return state 
+        try:
+            messages_to_send = [HumanMessage(content=prompt)]
+            response = self.llm.invoke(messages_to_send)
+            
+            # Always check for tool calls, regardless of whether we processed previous results
+            # Add the response to messages for potential tool calls
+            target_component["messages"] = messages_to_send + [response]
+            
+            # Check if the response contains tool calls
+            if hasattr(response, 'additional_kwargs') and 'tool_calls' in response.additional_kwargs:
+                return state  # Let tools node handle the tool calls, graph will come back here
+            
+            # If we reach here, no tool calls were made, so process the final response
+            response_text = str(response.content).strip()
+            
+            # Parse the response
+            target_idx = None
+            target_text = ""
+            target_role = "target"
+            result = None
+            description = ""
+            
+            lines = response_text.split('\n')
+            for line in lines:
+                line = line.strip()
+                if line.startswith("Target Index:"):
+                    try:
+                        target_idx = int(line.replace("Target Index:", "").strip())
+                    except ValueError:
+                        continue
+                elif line.startswith("Target Text:"):
+                    target_text = line.replace("Target Text:", "").strip()
+                elif line.startswith("Result:"):
+                    result = line.replace("Result:", "").strip().upper()
+                    if result == "":
+                        result = None
+                elif line.startswith("Role:"):
+                    role = line.replace("Role:", "").strip().lower()
+                    if role == "":
+                        role = "target"
+                    elif role not in ["target", "synonym"]:
+                        role = "unknown"
+                elif line.startswith("Description:"):
+                    description = line.replace("Description:", "").strip()
+            possible_target_idxs = current_attempt["possible_target_idxs"]
+            if target_idx is not None and target_idx in possible_target_idxs:
+                # Update the indicator component with target information
+                indicator_component["description"] += f" Targeting '{target_text}' at position {target_idx}"                
+                
+                target_component["text"] = target_text
+                target_component["start_pos"] = target_idx
+                target_component["end_pos"] = target_idx
+                target_component["result"] = result
+                target_component["role"] = role
+                target_component["description"] = description               
+                
+                if target_idx in current_attempt["remaining_word_idxs"]:
+                    current_attempt["remaining_word_idxs"].remove(target_idx)
+                if target_idx in current_attempt["possible_target_idxs"]:
+                    current_attempt["possible_target_idxs"].remove(target_idx)
+            
+            # Clear messages after processing
+            target_component["messages"] = []
+        
+        except Exception as e:
+            # Fallback: mark indicator as processed but don't create target
+            indicator_component["description"] = f"Target identification failed: {str(e)}"
+            current_attempt["current_component"] = None
+        
         return state
     
     def _verify_solution(self, state: SolverState) -> SolverState:
@@ -343,13 +468,14 @@ class CrypticCrosswordSolver:
         if not state["current_attempt"]:
             state["solved"] = False
             return state
+        
         solution = state["current_attempt"]["solution_attempt"]
         
         # Objective tests
         if not solution or not solution["solution"]:
             state["solved"] = False
             return state
-        
+        state["stage"] = "verify_solution"
         state["solution_attempts"].append(solution)
 
         if state["target_length"] and len(solution["solution"]) != state["target_length"]:
@@ -408,13 +534,14 @@ class CrypticCrosswordSolver:
             clue_words=clue.split(),
             target_length=target_length,
             given_letters=given_letters,
-            word_analyses={},
-            solution_attempts=[],
-            current_attempt=None,
-            iteration_count=0,
-            max_iterations=max_iterations,
-            final_solution=None,
-            solved=False
+
+
+
+
+
+
+
+            solved=False,            final_solution=None,            max_iterations=max_iterations,            iteration_count=0,            current_attempt=None,            solution_attempts=[],            word_analyses={},            stage="initial"
         )
         
         # Run the graph
