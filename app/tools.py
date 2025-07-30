@@ -31,7 +31,7 @@ def generate_anagrams(text: str) -> List[str]:
     return anagrams
 
 @tool
-def get_meanings(word: str) -> List[str]:
+def get_meanings(word: str) -> Dict:
     """Retrieve all meanings of a word. Used to check if a word has an appropriate meaning for its use in the solution, either as a synonym, an indicator or as the solution definition."""
     endpoint = 'https://en.wiktionary.org/api/rest_v1/page/definition'
     url = f"{endpoint}/{word}"
@@ -39,7 +39,7 @@ def get_meanings(word: str) -> List[str]:
     response = requests.get(url, headers=headers)
     if response.status_code != 200:
         print(f"Error: {response.status_code}")
-        return []
+        return {"word": word, "meanings": []}
     res = response.json()
     output = []
     if 'en' in res:
@@ -48,7 +48,7 @@ def get_meanings(word: str) -> List[str]:
                 if 'definition' in definition:
                     filtered_definition = clean_wiktionary_string(definition['definition'])
                     output.append(filtered_definition)
-    return output
+    return {"word": word, "meanings": output}
 
 @tool
 def find_hidden_words(phrase: str, target_length: int) -> List[str]:

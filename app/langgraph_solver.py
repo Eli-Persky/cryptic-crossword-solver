@@ -1,6 +1,3 @@
-"""
-LangGraph-based cryptic crossword solver with recurrent analysis.
-"""
 from typing import Dict, Optional
 import random
 
@@ -32,7 +29,7 @@ class CrypticCrosswordSolver:
         self.llm = ChatOpenAI(
             model="gpt-4o",
             api_key=openai_api_key,
-            temperature=0.3
+            temperature=0.2
         ).bind_tools(self.tools)
        
         # Build the graph
@@ -141,9 +138,9 @@ class CrypticCrosswordSolver:
     
     def _generate_solution(self, state: SolverState) -> SolverState:
         """Generate a solution attempt based on current analysis."""
+        state["messages"] = []  # Clear messages for a new attempt
         # Select words or sets of words from the clue to be sent on for analysis and populate current_component_to_analyse
         clue = state["clue_words"]
-
         if state["current_attempt"] is None:
             # Initialize the current attempt state
             state["current_attempt"] = CurrentAttemptState(
@@ -159,7 +156,8 @@ class CrypticCrosswordSolver:
             attempt_data["solution_attempt"] = SolutionAttempt(
                 solution="",
                 definition_part="",
-                wordplay_analysis=[]
+                wordplay_analysis=[],
+                clue_with_synonyms=state["clue_words"]
             )
 
         if not attempt_data["remaining_word_idxs"]:
@@ -167,7 +165,7 @@ class CrypticCrosswordSolver:
             return state
 
         component_idx = random.choice(attempt_data["remaining_word_idxs"]) # TODO: Allow multiword selection
-        word_to_analyse = clue[component_idx]
+        word_to_analyse = clue[component_idx].strip(",.:;").strip()
 
         new_component = WordPlayComponent(
             text=word_to_analyse,
@@ -203,6 +201,71 @@ class CrypticCrosswordSolver:
         
         return "continue"  # Continue with the current component
     
+    def _parse_component_response(self, response_text: str) -> tuple[str, str, Optional[str], str]:
+        """Parse LLM response for component analysis."""
+        role = "unknown"
+        wordplay_type = "unknown" 
+        result = None
+        description = "No description provided"
+        
+        lines = response_text.split('\n')
+        for line in lines:
+            line = line.strip()
+            if line.startswith("Role:"):
+                role = line.replace("Role:", "").strip().lower()
+            elif line.startswith("Wordplay Type:"):
+                wordplay_type = line.replace("Wordplay Type:", "").strip().lower()
+            elif line.startswith("Result:"):
+                result = line.replace("Result:", "").strip().upper()
+                if result == "":
+                    result = None
+            elif line.startswith("Description:"):
+                description = line.replace("Description:", "").strip().lower()
+        
+        return role, wordplay_type, result, description
+    
+    def _update_component_analysis(self, state: SolverState, current_component: WordPlayComponent, 
+                                 role: str, wordplay_type: str, result: Optional[str], description: str) -> None:
+        """Update the current component with analysis results and update state accordingly."""
+        current_component["role"] = role
+        current_component["wordplay_type"] = wordplay_type  
+        current_component["description"] = description
+        current_component["result"] = result
+        
+        if role != 'unknown' and wordplay_type != 'unknown':
+            attempt = state["current_attempt"]
+            if not attempt or not attempt["solution_attempt"]:
+                return
+                
+            solution_attempt = attempt["solution_attempt"]
+            start_idx = current_component["start_pos"]
+            end_idx = current_component["end_pos"]
+            
+            # Append component to the state["word_analyses"][(start_idx, end_idx)] for future reference
+            if (start_idx, end_idx) not in state["word_analyses"]:
+                state["word_analyses"][(start_idx, end_idx)] = []
+            
+            state["word_analyses"][(start_idx, end_idx)].append(current_component)
+            solution_attempt["wordplay_analysis"].append(current_component)
+            
+            if role == 'definition' and result:
+                solution_attempt["definition_part"] = current_component["text"]
+                solution_attempt["solution"] = result.upper()
+            elif role == "synonym" and result:
+                # Replace the word in the clue with the synonym
+                clue_with_syn = solution_attempt["clue_with_synonyms"]
+                clue_with_syn[start_idx] = result.upper()
+                if end_idx > start_idx:
+                    for idx in range(start_idx + 1, end_idx + 1):
+                        clue_with_syn[idx] = ""
+            
+            # Remove this word from remaining_word_idxs since it's been analyzed
+            for idx in range(start_idx, end_idx + 1):
+                if idx in attempt["remaining_word_idxs"]:
+                    attempt["remaining_word_idxs"].remove(idx)
+                if role != 'synonym' and idx in attempt["possible_target_idxs"]:
+                    attempt["possible_target_idxs"].remove(idx)
+    
     def _analyse_component(self, state: SolverState) -> SolverState:
         """Determine the role and worplay type of the selected word or phrase and finish populating current_component"""
         if not state["current_attempt"] or not state["current_attempt"]["solution_attempt"]:
@@ -214,19 +277,25 @@ class CrypticCrosswordSolver:
         if not solution_attempt or not current_component:
             return state
         state["stage"] = "analyse_component"
-        messages = current_component.get("messages", [])
+        state_messages = state.get("messages", [])
         tool_results = []
+        
         # Check if we have tool results to process
-        if messages:
-            # Process any tool call results
-            for msg in messages:
-                if hasattr(msg, 'content') and isinstance(msg.content, list):
-                    for content_item in msg.content:
-                        if hasattr(content_item, 'type') and content_item.type == 'tool_result':
-                            tool_results.append({
-                                'tool_name': content_item.name,
-                                'result': content_item.content
-                            })
+        if state_messages:
+            # Process any tool call results - look for ToolMessage objects or messages with tool content
+            for msg in state_messages:
+                # Check for ToolMessage type from LangChain
+                if str(type(msg).__name__) == 'ToolMessage':
+                    tool_results.append({
+                        'tool_name': getattr(msg, 'name', 'unknown_tool'),
+                        'result': msg.content
+                    })
+                # Also check for messages with tool_call_id (alternative structure)
+                elif hasattr(msg, 'tool_call_id'):
+                    tool_results.append({
+                        'tool_name': getattr(msg, 'name', 'unknown_tool'),
+                        'result': msg.content
+                    })
 
         full_prompt = generate_analyse_component_prompt(state, tool_results)
         if not full_prompt:
@@ -235,74 +304,47 @@ class CrypticCrosswordSolver:
         try:
             messages = [HumanMessage(content=full_prompt)]
             response = self.llm.invoke(messages)
-            # Check if we have processed tool results already
-            if not tool_results:                
-                # Add the response to messages for potential tool calls
-                current_component["messages"] = messages + [response]
-                
-                return state  # Let tools node handle the tool calls, graph will come back here
             
-            # If we reach here, either no tools were called or we have tool results
-            # Handle different response types
-            if hasattr(response, 'content'):
-                response_text = str(response.content).strip()
+            # If we have tool results, process them and provide final response
+            if tool_results:
+                # We have tool results, so process the final response
+                if hasattr(response, 'content'):
+                    response_text = str(response.content).strip()
+                else:
+                    response_text = str(response).strip()
+                
+                # Parse and update the component
+                role, wordplay_type, result, description = self._parse_component_response(response_text)
+                self._update_component_analysis(state, current_component, role, wordplay_type, result, description)
+                
+                # Clear messages after processing
+                state["messages"] = []
             else:
-                response_text = str(response).strip()
-            
-            # Parse the response
-            role = "unknown"
-            wordplay_type = "unknown"
-            result = None
-            description = "No description provided"
-            
-            lines = response_text.split('\n')
-            for line in lines:
-                line = line.strip()
-                if line.startswith("Role:"):
-                    role = line.replace("Role:", "").strip().lower()
-                elif line.startswith("Wordplay Type:"):
-                    wordplay_type = line.replace("Wordplay Type:", "").strip().lower()
-                elif line.startswith("Result:"):
-                    result = line.replace("Result:", "").strip().upper()
-                    if result == "":
-                        result = None
-                elif line.startswith("Description:"):
-                    description = line.replace("Description:", "").strip().lower()
-            
-            # Update the current component with the analysis
-            current_component["role"] = role
-            current_component["wordplay_type"] = wordplay_type  
-            current_component["description"] = description
-            current_component["result"] = result
-            
-            if role != 'unknown' and wordplay_type != 'unknown':
-                start_idx = current_component["start_pos"]
-                end_idx = current_component["end_pos"]
-                # Append component to the state["word_analyses"][(start_idx, end_idx)] for future reference
-                if (start_idx, end_idx) not in state["word_analyses"]:
-                    state["word_analyses"][(start_idx, end_idx)] = []
-                
-                state["word_analyses"][(start_idx, end_idx)].append(current_component)
-                solution_attempt["wordplay_analysis"].append(current_component)
-                if role == 'definition' and result:
-                    solution_attempt["definition_part"] = current_component["text"]
-                    solution_attempt["solution"] = result
-                
-                # Remove this word from remaining_word_idxs since it's been analyzed
-                for idx in range(start_idx, end_idx + 1):
-                    if idx in attempt["remaining_word_idxs"]:
-                        attempt["remaining_word_idxs"].remove(idx)
-                    if role != 'synonym' and idx in attempt["possible_target_idxs"]:
-                        attempt["possible_target_idxs"].remove(idx)
-            
-            # Clear messages after processing
-            current_component["messages"] = []
+                # No tool results yet - check if response contains tool calls
+                if hasattr(response, 'additional_kwargs') and 'tool_calls' in response.additional_kwargs:
+                    # LLM wants to call tools - add to messages and let tools node handle it
+                    state["messages"] = messages + [response]
+                else:
+                    # No tool calls needed - process the response directly
+                    if hasattr(response, 'content'):
+                        response_text = str(response.content).strip()
+                    else:
+                        response_text = str(response).strip()
+                    
+                    # Parse and update the component
+                    role, wordplay_type, result, description = self._parse_component_response(response_text)
+                    self._update_component_analysis(state, current_component, role, wordplay_type, result, description)
+                    
+                    # Clear messages after processing
+                    state["messages"] = []
 
         except Exception as e:
             # Fallback if LLM call fails
             current_component["role"] = "unknown"
             current_component["wordplay_type"] = "unknown"
             current_component["description"] = f"Analysis failed: {str(e)}"
+            # Clear messages even on error
+            state["messages"] = []
         
         return state
     
@@ -310,19 +352,79 @@ class CrypticCrosswordSolver:
         """Decide whether to use tools in component analysis or skip to target search."""
         current_attempt = state["current_attempt"]
         if not current_attempt or not current_attempt["current_component"]:
+            state["messages"] = []
             return "skip_tools"
         
-        current_component = current_attempt["current_component"]
-        messages = current_component.get("messages", [])
+        messages = state.get("messages", [])
         
         # Check if there are pending tool calls in the messages
         if messages:
             msg = messages[-1]
             if hasattr(msg, 'additional_kwargs') and 'tool_calls' in msg.additional_kwargs:
+                # Found tool calls - let ToolNode handle them
                 return "use_tools"
         
-        return "skip_tools"
+        # No tool calls found - clear messages and skip tools
+        state["messages"] = []
+        return "skip_tools" 
     
+    def _parse_target_response(self, response_text: str) -> tuple[Optional[int], str, str, Optional[str], str]:
+        """Parse LLM response for target finding."""
+        target_idx = None
+        target_text = ""
+        role = "target"
+        result = None
+        description = ""
+        
+        lines = response_text.split('\n')
+        for line in lines:
+            line = line.strip()
+            if line.startswith("Target Index:"):
+                try:
+                    target_idx = int(line.replace("Target Index:", "").strip())
+                except ValueError:
+                    continue
+            elif line.startswith("Target Text:"):
+                target_text = line.replace("Target Text:", "").strip()
+            elif line.startswith("Result:"):
+                result = line.replace("Result:", "").strip().upper()
+                if result == "":
+                    result = None
+            elif line.startswith("Role:"):
+                role = line.replace("Role:", "").strip().lower()
+                if role == "":
+                    role = "target"
+                elif role not in ["target", "synonym"]:
+                    role = "unknown"
+            elif line.startswith("Description:"):
+                description = line.replace("Description:", "").strip()
+        
+        return target_idx, target_text, role, result, description
+    
+    def _update_target_analysis(self, state: SolverState, indicator_component: WordPlayComponent, 
+                               target_component: WordPlayComponent, target_idx: Optional[int], 
+                               target_text: str, role: str, result: Optional[str], description: str) -> None:
+        """Update target component analysis and state accordingly."""
+        current_attempt = state["current_attempt"]
+        if not current_attempt:
+            return
+            
+        possible_target_idxs = current_attempt["possible_target_idxs"]
+        if target_idx is not None and target_idx in possible_target_idxs:
+            # Update the indicator component with target information
+            indicator_component["description"] += f" Targeting '{target_text}' at position {target_idx}"                
+            
+            target_component["text"] = target_text
+            target_component["start_pos"] = target_idx
+            target_component["end_pos"] = target_idx
+            target_component["result"] = result
+            target_component["role"] = role
+            target_component["description"] = description               
+            
+            if target_idx in current_attempt["remaining_word_idxs"]:
+                current_attempt["remaining_word_idxs"].remove(target_idx)
+            if target_idx in current_attempt["possible_target_idxs"]:
+                current_attempt["possible_target_idxs"].remove(target_idx)
     
     def _decide_search_for_target(self, state: SolverState) -> str:
         """Decide if the current component needs a target to be found in the clue."""
@@ -379,18 +481,23 @@ class CrypticCrosswordSolver:
         state["stage"] = "find_target"
 
         # Check if we have tool results to process
-        messages = target_component.get("messages", [])
+        state_messages = state.get("messages", [])
         tool_results = []
-        if messages:
-            # Process any tool call results
-            for msg in messages:
-                if hasattr(msg, 'content') and isinstance(msg.content, list):
-                    for content_item in msg.content:
-                        if hasattr(content_item, 'type') and content_item.type == 'tool_result':
-                            tool_results.append({
-                                'tool_name': content_item.name,
-                                'result': content_item.content
-                            })
+        if state_messages:
+            # Process any tool call results - look for ToolMessage objects or messages with tool content
+            for msg in state_messages:
+                # Check for ToolMessage type from LangChain
+                if str(type(msg).__name__) == 'ToolMessage':
+                    tool_results.append({
+                        'tool_name': getattr(msg, 'name', 'unknown_tool'),
+                        'result': msg.content
+                    })
+                # Also check for messages with tool_call_id (alternative structure)
+                elif hasattr(msg, 'tool_call_id'):
+                    tool_results.append({
+                        'tool_name': getattr(msg, 'name', 'unknown_tool'),
+                        'result': msg.content
+                    })
 
         prompt = generate_find_target_prompt(state, indicator_component, tool_results)
         if not prompt:
@@ -399,70 +506,41 @@ class CrypticCrosswordSolver:
             messages_to_send = [HumanMessage(content=prompt)]
             response = self.llm.invoke(messages_to_send)
             
-            # Always check for tool calls, regardless of whether we processed previous results
-            # Add the response to messages for potential tool calls
-            target_component["messages"] = messages_to_send + [response]
-            
-            # Check if the response contains tool calls
-            if hasattr(response, 'additional_kwargs') and 'tool_calls' in response.additional_kwargs:
-                return state  # Let tools node handle the tool calls, graph will come back here
-            
-            # If we reach here, no tool calls were made, so process the final response
-            response_text = str(response.content).strip()
-            
-            # Parse the response
-            target_idx = None
-            target_text = ""
-            target_role = ""
-            result = None
-            description = ""
-            
-            lines = response_text.split('\n')
-            for line in lines:
-                line = line.strip()
-                if line.startswith("Target Index:"):
-                    try:
-                        target_idx = int(line.replace("Target Index:", "").strip())
-                    except ValueError:
-                        continue
-                elif line.startswith("Target Text:"):
-                    target_text = line.replace("Target Text:", "").strip()
-                elif line.startswith("Result:"):
-                    result = line.replace("Result:", "").strip().upper()
-                    if result == "":
-                        result = None
-                elif line.startswith("Role:"):
-                    role = line.replace("Role:", "").strip().lower()
-                    if role == "":
-                        role = "target"
-                    elif role not in ["target", "synonym"]:
-                        role = "unknown"
-                elif line.startswith("Description:"):
-                    description = line.replace("Description:", "").strip()
-            possible_target_idxs = current_attempt["possible_target_idxs"]
-            if target_idx is not None and target_idx in possible_target_idxs:
-                # Update the indicator component with target information
-                indicator_component["description"] += f" Targeting '{target_text}' at position {target_idx}"                
+            # If we have tool results, process them and provide final response
+            if tool_results:
+                # We have tool results, so process the final response
+                response_text = str(response.content).strip()
                 
-                target_component["text"] = target_text
-                target_component["start_pos"] = target_idx
-                target_component["end_pos"] = target_idx
-                target_component["result"] = result
-                target_component["role"] = role
-                target_component["description"] = description               
+                # Parse and update the target
+                target_idx, target_text, role, result, description = self._parse_target_response(response_text)
+                self._update_target_analysis(state, indicator_component, target_component, 
+                                           target_idx, target_text, role, result, description)
                 
-                if target_idx in current_attempt["remaining_word_idxs"]:
-                    current_attempt["remaining_word_idxs"].remove(target_idx)
-                if target_idx in current_attempt["possible_target_idxs"]:
-                    current_attempt["possible_target_idxs"].remove(target_idx)
-            
-            # Clear messages after processing
-            target_component["messages"] = []
+                # Clear messages after processing
+                state["messages"] = []
+            else:
+                # No tool results yet - check if response contains tool calls
+                if hasattr(response, 'additional_kwargs') and 'tool_calls' in response.additional_kwargs:
+                    # LLM wants to call tools - add to messages and let tools node handle it
+                    state["messages"] = messages_to_send + [response]
+                else:
+                    # No tool calls needed - process the response directly
+                    response_text = str(response.content).strip()
+                    
+                    # Parse and update the target
+                    target_idx, target_text, role, result, description = self._parse_target_response(response_text)
+                    self._update_target_analysis(state, indicator_component, target_component, 
+                                               target_idx, target_text, role, result, description)
+                    
+                    # Clear messages after processing
+                    state["messages"] = []
         
         except Exception as e:
             # Fallback: mark indicator as processed but don't create target
             indicator_component["description"] = f"Target identification failed: {str(e)}"
             current_attempt["current_component"] = None
+            # Clear messages even on error
+            state["messages"] = []
         
         return state
     
@@ -513,7 +591,6 @@ class CrypticCrosswordSolver:
     
     def _decide_next(self, state: SolverState) -> str:
         """Check if the solution is solved."""
-
         if state["solved"]:
             return "stop"
         else:
@@ -542,7 +619,8 @@ class CrypticCrosswordSolver:
             current_attempt=None,
             solution_attempts=[],
             word_analyses={},
-            stage="initial"
+            stage="initial",
+            messages=[]
         )
         
         # Run the graph

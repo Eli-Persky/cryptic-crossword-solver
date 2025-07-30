@@ -1,5 +1,5 @@
 from typing import List, Dict, Optional, Tuple
-from .state import SolverState, WordPlayComponent, SolutionAttempt
+from .state import SolverState, WordPlayComponent
 
 def generate_analyse_component_prompt(state: SolverState, tool_results: List[Dict]) -> str:    
     # Give LLM context including clue, solved components, ideas relating to the current component which are sourced from state["word_analyses"][word_idx]
@@ -15,8 +15,7 @@ def generate_analyse_component_prompt(state: SolverState, tool_results: List[Dic
     if not current_component:
         return ""
     
-    clue_text = state["clue"]
-    clue_words = state["clue_words"]
+    clue_text = ' '.join(filter(lambda s: s!= "", solution_attempt["clue_with_synonyms"]))
     target_length = state["target_length"]
     given_letters = state["given_letters"]
 
@@ -83,7 +82,7 @@ def generate_analyse_component_prompt(state: SolverState, tool_results: List[Dic
 
     # The LLM must return structured output in order to populate the role, wordplay type and description of the current component
     try:
-        with open("app/prompts/analyse_comp_sys_nt.txt") as f:
+        with open("app/prompts/analyse_comp_prompt.txt") as f:
             system_prompt = f.read().strip().format(
                 definition_line=definition_line,
                 use_givens_line=use_givens_line,
@@ -125,6 +124,9 @@ def generate_find_target_prompt(state: SolverState, indicator_component: WordPla
     for idx in possible_target_idxs:
         if idx < len(clue_words):
             candidates.append(f"{idx}: {clue_words[idx]}")
+    candidates_string = chr(10).join(candidates)
+
+    clue_text = ' '.join(filter(lambda s: s!= "", solution_attempt["clue_with_synonyms"]))
     
     # Create prompt for target identification
     wordplay_type = indicator_component["wordplay_type"]
@@ -163,27 +165,18 @@ def generate_find_target_prompt(state: SolverState, indicator_component: WordPla
             for comp in other_components:
                 context_parts.append(f"  '{comp['text']}': {comp['role']} ({comp['wordplay_type']})")
     context = "\n".join(context_parts)
-    prompt = f"""
-You are analyzing a cryptic crossword clue: "{' '.join(clue_words)}"
 
-The word "{indicator_text}" has been identified as an INDICATOR for {wordplay_type} wordplay.
-
-Available target candidates:
-{chr(10).join(candidates)}
-
-{context}
-
-You can use tools to help analyze the candidates (generate anagrams, find meanings, etc.) before making your decision.
-
-If you need more information, call the appropriate tools. Otherwise, identify the target and provide your analysis.
-
-When ready to provide your final answer, respond in this exact format:
-Target Index: [number]
-Target Text: [the actual word/phrase]
-Role: [target/synonym]
-Wordplay Type: {wordplay_type}
-Result: [result of applying the wordplay]
-Description: [brief explanation of the wordplay operation]
-"""
+    try:
+        with open("app/prompts/analyse_comp_prompt.txt") as f:
+            prompt = f.read().strip().format(
+                clue_text=clue_text,
+                indicator_text=indicator_text,
+                wordplay_type=wordplay_type,
+                candidates_string=candidates_string,
+                context=context
+            )
+    except FileNotFoundError:
+        print("Error: Prompt file not found. Please ensure 'analyse_comp_sys_nt.txt' exists in the prompts directory.")
+        return ""
     
     return prompt

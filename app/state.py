@@ -19,6 +19,7 @@ class SolutionAttempt(TypedDict):
     solution: str
     definition_part: str
     wordplay_analysis: List[WordPlayComponent]
+    clue_with_synonyms: List[str]
 
 class CurrentAttemptState(TypedDict):
     """State of the current attempt at solving the clue."""
@@ -40,3 +41,4 @@ class SolverState(TypedDict):
     final_solution: Optional[SolutionAttempt]
     solved: bool
     stage: str
+    messages: Annotated[list, add_messages]

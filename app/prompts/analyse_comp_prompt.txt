@@ -17,6 +17,9 @@ Common wordplay types:
 - synonym: If the role of the word is synonym or definition, then the wordplay type is synonym
 - unknown: Wordplay type is unclear
 
+If the word has a very obvious use as an indcator, and this selection is not incompatible with the already solved parts of the clue, then this output should be returned without the use of tools.
+If the use of the word is not so clear then the other information provided may be useful.
 {use_givens_line}{use_others_line}{use_previous_line}
-If and only if the the role is 'synonym', you must provide what word it should be replaced with as the 'result' otherwise, do not provide this
+If the word has no clear use as an indicator and there is no useful synonym for the word which is likely to be part of the solution, then its role and wordplay type can be 'unknown'
+If and only if the the role is 'synonym', you must provide what word it should be replaced with as the 'result' otherwise, do not provide this field.
 Provide a brief description explaining why you chose this role and wordplay type.

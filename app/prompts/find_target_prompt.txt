@@ -1,0 +1,20 @@
+You are analyzing a cryptic crossword clue: "{clue_text}"
+
+The word "{indicator_text}" has been identified as an INDICATOR for {wordplay_type} wordplay.
+
+Available target candidates:
+{candidates_string}
+
+{context}
+
+You can use tools to help analyze the candidates (generate anagrams, find meanings, etc.) before making your decision.
+
+If you need more information, call the appropriate tools. Otherwise, identify the target and provide your analysis.
+
+When ready to provide your final answer, respond in this exact format:
+Target Index: [number]
+Target Text: [the actual word/phrase]
+Role: [target/synonym]
+Wordplay Type: {wordplay_type}
+Result: [result of applying the wordplay]
+Description: [brief explanation of the wordplay operation]

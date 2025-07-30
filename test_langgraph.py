@@ -47,5 +47,5 @@ def main():
     print(json.dumps(result, indent=2))
 
 if __name__ == "__main__":
-    save_image = True
+    save_image = False
     main()
