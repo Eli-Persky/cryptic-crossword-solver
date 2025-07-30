@@ -1,6 +1,6 @@
 # Cryptic Crossword Solver
 
-This project is a web application designed to solve cryptic crossword clues using an advanced LangGraph-based agent powered by OpenAI's GPT-4. The solver uses a graph structure with recurrent reasoning, specialized tools (anagram generator, dictionary lookup, etc.), and iterative analysis to produce high-quality, structured solutions and detailed reasoning.
+This project is a web application designed to solve cryptic crossword clues using a LangGraph-based agent powered by GPT-4o. The solver uses a graph structure with recurrent reasoning, specialized tools (anagram generator, dictionary lookup, etc.), and iterative analysis to produce high-quality, structured solutions and detailed reasoning.
 
 ### Graph Structure
 ![LangGraph Structure](graph.png)
