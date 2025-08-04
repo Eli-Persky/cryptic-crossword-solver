@@ -166,14 +166,14 @@ document.addEventListener('DOMContentLoaded', function() {
         
         let resultInfo = '';
         if (mapping.result && mapping.result.trim() !== '') {
-            resultInfo = `<div class="tooltip-result">"${mapping.result}"</div>`;
+            resultInfo = `<div class="tooltip-result">${mapping.result}</div>`;
         }
         
         tooltip.innerHTML = `
             <div class="tooltip-role">${mapping.role.charAt(0).toUpperCase() + mapping.role.slice(1)}</div>
             ${typeInfo}
-            ${resultInfo}
             <div class="tooltip-description">${mapping.description}</div>
+            ${resultInfo}
         `;
         
         return tooltip;
@@ -311,12 +311,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 attemptDiv.className = 'attempt-item';
                 attemptDiv.innerHTML = `
                     <h4>Attempt ${index + 1}</h4>
-                    ${attempt.solution ? `<div><strong>Partial Solution:</strong> ${attempt.solution}</div>` : ''}
+                    ${attempt.solution ? `<div><strong>Solution:</strong> ${attempt.solution}</div>` : ''}
                     ${attempt.definition ? `<div><strong>Definition:</strong> ${attempt.definition}</div>` : ''}
                     <div class="attempt-components">
-                        ${attempt.wordplay_components.map(comp => 
-                            `<span class="mini-component">${comp.indicator} (${comp.wordplay_type})</span>`
-                        ).join(' ')}
+                        ${attempt.wordplay_components.map(comp => {
+                            let componentText = `${comp.indicator} (${comp.wordplay_type})`;
+                            if (comp.target && comp.result) {
+                                componentText += ` → ${comp.target}: ${comp.result}`;
+                            } else if (comp.result) {
+                                componentText += `: ${comp.result}`;
+                            }
+                            return `<span class="mini-component">${componentText}</span>`;
+                        }).join(' ')}
                     </div>
                 `;
                 attemptsList.appendChild(attemptDiv);

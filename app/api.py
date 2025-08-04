@@ -1,6 +1,7 @@
 from flask import Flask, Blueprint, request, jsonify
 from app.get_solution import get_llm_solution
-from app.fake_state import get_fake_ui_response
+from app.mock_state import get_mock_ui_response
+from app.state_transformer import transform_state_to_ui_format
 
 # Create a blueprint
 api_blueprint = Blueprint('api', __name__)
@@ -19,23 +20,30 @@ def submit_clue():
         return jsonify({'error': 'No clue provided'}), 400
     
     if use_mock:
-        # Use fake state for UI testing
-        solution = get_fake_ui_response(clue, length)
+        # Use mock state for UI testing
+        solution = get_mock_ui_response(clue, length)
         return jsonify({
             'clue': clue,
             'solution': solution
         }), 200
     else:
         # Use real LLM solver
-        solution = get_llm_solution(clue, {}, length)
+        raw_solution = get_llm_solution(clue, {}, length)
     
         # Handle both structured responses and error responses
-        if isinstance(solution, dict):
-            if 'error' in solution:
+        if isinstance(raw_solution, dict):
+            if 'error' in raw_solution:
                 # Return error response
-                return jsonify(solution), 500
+                return jsonify(raw_solution), 500
             else:
-                # Return structured solution
+                # Check if this is already a UI-formatted response or raw state
+                if 'attempted_solutions' in raw_solution and 'complete_solution' in raw_solution:
+                    # Already formatted for UI
+                    solution = raw_solution
+                else:
+                    # Transform raw state to UI format
+                    solution = transform_state_to_ui_format(raw_solution, clue)
+                
                 return jsonify({
                     'clue': clue,
                     'solution': solution
@@ -47,7 +55,7 @@ def submit_clue():
                 'solution': {
                     'attempted_solutions': [],
                     'complete_solution': {
-                        'solution': str(solution),
+                        'solution': str(raw_solution),
                         'definition': 'Legacy response format',
                         'wordplay_components': [
                             {
@@ -66,7 +74,7 @@ def submit_clue_mock():
     
     # For mock mode, ignore the clue from the form and use the default mock clue
     # This allows testing without having to type a clue
-    solution = get_fake_ui_response()  # Use default parameters
+    solution = get_mock_ui_response()  # Use default parameters
     return jsonify({
         'clue': solution["interactive_clue"]["original_clue"],
         'solution': solution

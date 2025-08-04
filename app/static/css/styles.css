@@ -611,7 +611,7 @@ button:hover {
 }
 
 .tooltip-result {
-    background: #4a5568;
+    background: rgba(0, 0, 0, 0.3);
     padding: 4px 8px;
     border-radius: 3px;
     margin: 6px 0;
