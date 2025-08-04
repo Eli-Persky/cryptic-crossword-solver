@@ -172,8 +172,7 @@ def get_mock_langgraph_state(clue: str = "Initially irritated, raised uproar abo
         clue_with_synonyms=["Initially", "irritated", "raised", "DIN", "about", "SIP", "that's", "tasteless"]
     )
     
-    # Create the fake final state
-    fake_state = SolverState(
+    mock_state = SolverState(
         clue=clue,
         clue_words=clue.split(),
         target_length=target_length,
@@ -185,10 +184,12 @@ def get_mock_langgraph_state(clue: str = "Initially irritated, raised uproar abo
         solution_attempts=[attempt1, attempt2],
         word_analyses={},
         stage="finalized",
+        tool_count=0,
+        tool_limit=3,
         messages=[]
     )
     
-    return fake_state
+    return mock_state
 
 
 def get_mock_ui_response(clue: str = "Initially irritated, raised uproar about drink that's tasteless",

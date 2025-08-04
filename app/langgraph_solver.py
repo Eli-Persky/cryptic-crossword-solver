@@ -334,7 +334,6 @@ class CrypticCrosswordSolver:
                     # Parse and update the component
                     role, wordplay_type, result, description = self._parse_component_response(response_text)
                     self._update_component_analysis(state, current_component, role, wordplay_type, result, description)
-                    
                     # Clear messages after processing
                     state["messages"] = []
 
@@ -352,7 +351,9 @@ class CrypticCrosswordSolver:
         """Decide whether to use tools in component analysis or skip to target search."""
         current_attempt = state["current_attempt"]
         if not current_attempt or not current_attempt["current_component"]:
-            state["messages"] = []
+            return "skip_tools"
+        
+        if state["tool_count"] >= state["tool_limit"]:
             return "skip_tools"
         
         messages = state.get("messages", [])
@@ -364,8 +365,6 @@ class CrypticCrosswordSolver:
                 # Found tool calls - let ToolNode handle them
                 return "use_tools"
         
-        # No tool calls found - clear messages and skip tools
-        state["messages"] = []
         return "skip_tools" 
     
     def _parse_target_response(self, response_text: str) -> tuple[Optional[int], str, str, Optional[str], str]:
@@ -508,6 +507,7 @@ class CrypticCrosswordSolver:
             
             # If we have tool results, process them and provide final response
             if tool_results:
+                state["tool_count"] += 1
                 # We have tool results, so process the final response
                 response_text = str(response.content).strip()
                 
@@ -519,6 +519,7 @@ class CrypticCrosswordSolver:
                 # Clear messages after processing
                 state["messages"] = []
             else:
+                state["tool_count"]  = 0
                 # No tool results yet - check if response contains tool calls
                 if hasattr(response, 'additional_kwargs') and 'tool_calls' in response.additional_kwargs:
                     # LLM wants to call tools - add to messages and let tools node handle it
@@ -620,6 +621,8 @@ class CrypticCrosswordSolver:
             solution_attempts=[],
             word_analyses={},
             stage="initial",
+            tool_count=0,
+            tool_limit=3,
             messages=[]
         )
         

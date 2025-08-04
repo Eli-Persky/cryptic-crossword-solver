@@ -41,4 +41,7 @@ class SolverState(TypedDict):
     final_solution: Optional[SolutionAttempt]
     solved: bool
     stage: str
+    tool_count: int
+    tool_limit: int
     messages: Annotated[list, add_messages]
+    
