@@ -12,6 +12,7 @@ Common wordplay types:
 - hidden: Indicates that the solution is hidden within consecutive letters of some other words (indicated by world like "in", "part of", etc.)
 - homophone: Sounds like another word (indicated by words like "heard", etc.)
 - deletion: Letters are removed (indicated by words like "without", "loses", etc.)
+- selection: One or more letters are selected from the target word (indicated by words like "initially", "finally", "alternately", etc.)
 - substitution: Letters are replaced (indicated by words like "for", "becomes", etc.)
 - link word: A word linking the definition to the worplay (words like "is", "of", etc.)
 - synonym: If the role of the word is synonym or definition, then the wordplay type is synonym

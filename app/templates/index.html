@@ -34,42 +34,39 @@
         <div id="solution-display" class="result-section hidden">
             <h2>Solution Analysis</h2>
             
-            <div class="clue-display">
-                <strong>Clue:</strong> <span id="result-clue"></span>
-                <div id="length-info" class="length-info hidden">
-                    <small>Expected length: <span id="expected-length"></span> letters</small>
-                </div>
-            </div>
-            
             <div class="main-solution">
                 <div class="answer-box">
                     <div class="answer-word" id="main-answer"></div>
                 </div>
             </div>
             
-            <div class="definition-section">
-                <h3>Definition</h3>
-                <div id="definition-text" class="definition-box"></div>
-            </div>
-            
-            <div class="wordplay-section">
-                <h3>Wordplay Breakdown</h3>
-                <div id="wordplay-components" class="components-list"></div>
+            <div class="interactive-clue-section">
+                <div id="interactive-clue" class="interactive-clue">
+                    <!-- Words will be dynamically populated here -->
+                </div>
+                <div id="word-tooltip" class="word-tooltip hidden">
+                    <div class="tooltip-content">
+                        <div class="tooltip-role"></div>
+                        <div class="tooltip-type"></div>
+                        <div class="tooltip-result"></div>
+                        <div class="tooltip-description"></div>
+                    </div>
+                </div>
             </div>
             
             <div id="attempts-section" class="attempts hidden">
                 <h3>Solution Attempts</h3>
                 <div id="attempts-list"></div>
             </div>
-            
-            <div id="reasoning-section" class="reasoning hidden">
-                <h3>Detailed Reasoning Analysis</h3>
-                <div id="reasoning-text" class="reasoning-box"></div>
-                <button id="toggle-reasoning" class="toggle-btn">Show Reasoning</button>
-            </div>
         </div>
     </div>
 
     <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
+    {% if mock_mode %}
+    <script>
+        // Set global mock mode flag
+        window.mockMode = true;
+    </script>
+    {% endif %}
 </body>
 </html>

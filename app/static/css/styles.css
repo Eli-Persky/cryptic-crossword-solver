@@ -93,6 +93,29 @@ input[type="number"]:focus {
     font-size: 0.9em;
 }
 
+.mock-toggle {
+    margin: 15px 0;
+    padding: 15px;
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 8px;
+}
+
+.mock-toggle label {
+    display: flex;
+    align-items: center;
+    font-weight: 500;
+    color: #856404;
+    margin-bottom: 0;
+    cursor: pointer;
+}
+
+.mock-toggle input[type="checkbox"] {
+    margin-right: 10px;
+    transform: scale(1.2);
+    cursor: pointer;
+}
+
 button {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
@@ -390,4 +413,248 @@ button:hover {
         align-items: flex-start;
         gap: 5px;
     }
+}
+
+/* Interactive Clue Styles */
+.interactive-clue-section {
+    background: white;
+    padding: 25px;
+    border-radius: 10px;
+    margin-bottom: 25px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.interactive-clue-section h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: #4a5568;
+    font-size: 1.3em;
+}
+
+.interactive-clue {
+    font-size: 1.2em;
+    line-height: 1.8;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    position: relative;
+}
+
+.clue-word {
+    display: inline-block;
+    padding: 4px 6px;
+    margin: 2px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.clue-word:hover {
+    background: #e2e8f0;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Different roles get different styling */
+.clue-word.role-definition {
+    border-bottom: 2px solid #48bb78;
+}
+
+.clue-word.role-indicator {
+    border-bottom: 2px solid #ed8936;
+}
+
+.clue-word.role-target {
+    border-bottom: 2px solid #4299e1;
+}
+
+.clue-word.role-connector {
+    color: #a0aec0;
+    border-bottom: 1px dotted #cbd5e0;
+}
+
+/* Highlight states with role-specific colors */
+.clue-word.highlighted.role-definition {
+    background: #c6f6d5;
+    border: 2px solid #48bb78;
+    color: #22543d;
+    font-weight: bold;
+}
+
+.clue-word.highlighted.role-indicator {
+    background: #fef5e7;
+    border: 2px solid #ed8936;
+    color: #c05621;
+    font-weight: bold;
+}
+
+.clue-word.highlighted.role-target {
+    background: #e6f3ff;
+    border: 2px solid #4299e1;
+    color: #2c5282;
+    font-weight: bold;
+}
+
+.clue-word.highlighted.role-connector {
+    background: #f7fafc;
+    border: 2px solid #a0aec0;
+    color: #4a5568;
+    font-weight: bold;
+}
+
+.clue-word.related-highlighted.role-definition {
+    background: #f0fff4;
+    border: 2px solid #68d391;
+    color: #276749;
+}
+
+.clue-word.related-highlighted.role-indicator {
+    background: #fffaf0;
+    border: 2px solid #f6ad55;
+    color: #dd6b20;
+}
+
+.clue-word.related-highlighted.role-target {
+    background: #f0f9ff;
+    border: 2px solid #63b3ed;
+    color: #3182ce;
+}
+
+.clue-word.related-highlighted.role-connector {
+    background: #f7fafc;
+    border: 2px solid #cbd5e0;
+    color: #718096;
+}
+
+/* Tooltip styles */
+.word-tooltip {
+    position: absolute;
+    background: #2d3748;
+    color: white;
+    padding: 12px;
+    border-radius: 6px;
+    font-size: 0.9em;
+    max-width: 300px;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.word-tooltip.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.word-tooltip::after {
+    content: '';
+    position: absolute;
+    left: var(--arrow-offset, 20px);
+    border: 6px solid transparent;
+    border-top-color: #2d3748;
+}
+
+/* Tooltip positioning variants */
+.word-tooltip.tooltip-above {
+    margin-bottom: 10px;
+}
+
+.word-tooltip.tooltip-above::after {
+    top: 100%;
+    border-top-color: #2d3748;
+    border-bottom-color: transparent;
+}
+
+.word-tooltip.tooltip-below {
+    margin-top: 10px;
+}
+
+.word-tooltip.tooltip-below::after {
+    top: -12px;
+    border-top-color: transparent;
+    border-bottom-color: #2d3748;
+}
+
+/* Multiple tooltip spacing */
+.word-tooltip.primary-tooltip {
+    z-index: 1001;
+}
+
+.word-tooltip.secondary-tooltip {
+    z-index: 1000;
+    background: #4a5568;
+    margin-left: 0; /* Remove horizontal margin since we're positioning individually */
+}
+
+.word-tooltip.secondary-tooltip.tooltip-above::after {
+    border-top-color: #4a5568;
+}
+
+.word-tooltip.secondary-tooltip.tooltip-below::after {
+    border-bottom-color: #4a5568;
+}
+
+.tooltip-role {
+    font-weight: bold;
+    color: #fbb6ce;
+    margin-bottom: 4px;
+}
+
+.tooltip-type {
+    color: #90cdf4;
+    font-style: italic;
+    margin-bottom: 6px;
+}
+
+.tooltip-result {
+    background: #4a5568;
+    padding: 4px 8px;
+    border-radius: 3px;
+    margin: 6px 0;
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+}
+
+.tooltip-description {
+    color: #e2e8f0;
+    font-size: 0.85em;
+    line-height: 1.4;
+}
+
+/* Legend for role colors */
+.clue-legend {
+    display: flex;
+    gap: 15px;
+    margin-top: 10px;
+    font-size: 0.85em;
+    color: #718096;
+    flex-wrap: wrap;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.legend-color {
+    width: 12px;
+    height: 3px;
+    border-radius: 2px;
+}
+
+.legend-color.definition {
+    background: #48bb78;
+}
+
+.legend-color.indicator {
+    background: #ed8936;
+}
+
+.legend-color.target {
+    background: #4299e1;
 }

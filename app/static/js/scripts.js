@@ -16,18 +16,26 @@ document.addEventListener('DOMContentLoaded', function() {
         let clue = clueInput.value.trim();
         const solutionLength = lengthInput.value;
         
-        if (!clue) return;
+        // Determine if we're in mock mode based on the URL path or a global variable
+        const isMockMode = window.location.pathname === '/mock' || window.mockMode === true;
+        
+        // In mock mode, allow empty clue (we'll use the clue from mock data)
+        // In normal mode, require a clue
+        if (!isMockMode && !clue) return;
 
         showLoading();
         hideResults();
 
         try {
-            const response = await fetch('/api/submit_clue', {
+            const endpoint = isMockMode ? '/api/submit_clue_mock' : '/api/submit_clue';
+            const requestBody = { clue: clue, length: solutionLength };
+
+            const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ clue: clue, length: solutionLength })
+                body: JSON.stringify(requestBody)
             });
 
             const data = await response.json();
@@ -45,53 +53,253 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    function displaySolution(formattedClue, originalClue, solution) {
-        // Display the original clue (without length) for better readability
-        document.getElementById('result-clue').textContent = originalClue;
+    // Interactive Clue functionality
+    function setupInteractiveClue(clue, wordMapping) {
+        const interactiveClueContainer = document.getElementById('interactive-clue');
+        const words = clue.split(/\s+/);
         
-        // Show length information if it was provided
-        const lengthInput = document.getElementById('solution-length');
-        const lengthInfo = document.getElementById('length-info');
-        const expectedLength = document.getElementById('expected-length');
+        interactiveClueContainer.innerHTML = '';
         
-        if (lengthInput.value && lengthInput.value >= 3) {
-            expectedLength.textContent = lengthInput.value;
-            lengthInfo.classList.remove('hidden');
-        } else {
-            lengthInfo.classList.add('hidden');
+        words.forEach((word, index) => {
+            const wordSpan = document.createElement('span');
+            wordSpan.className = 'clue-word';
+            wordSpan.textContent = word;
+            wordSpan.dataset.position = index;
+            
+            // Add role class if word has mapping
+            if (wordMapping && wordMapping[index]) {
+                const mapping = wordMapping[index];
+                wordSpan.classList.add(`role-${mapping.role}`);
+                
+                // Add hover event listeners
+                wordSpan.addEventListener('mouseenter', (e) => showTooltip(e, mapping, index, wordMapping));
+                wordSpan.addEventListener('mouseleave', hideTooltip);
+            }
+            
+            interactiveClueContainer.appendChild(wordSpan);
+            
+            // Add space after word (except last word)
+            if (index < words.length - 1) {
+                interactiveClueContainer.appendChild(document.createTextNode(' '));
+            }
+        });
+        
+        // Add legend
+        addClueRoleLegend();
+    }
+    
+    function showTooltip(event, mapping, position, wordMapping) {
+        hideTooltip(); // Hide any existing tooltips
+        
+        const tooltips = [];
+        
+        // Primary tooltip for the hovered word (always above)
+        const primaryTooltip = createTooltip(mapping, 'primary-tooltip');
+        tooltips.push({
+            element: primaryTooltip, 
+            mapping: mapping, 
+            position: position,
+            targetElement: event.target,
+            placement: 'above'
+        });
+        
+        // Check if this word has a related indicator/target pair
+        let relatedMapping = null;
+        let relatedElement = null;
+        if (mapping.related_positions && mapping.related_positions.length > 0) {
+            // Find the first related word that has a different role
+            for (const relatedPos of mapping.related_positions) {
+                if (wordMapping[relatedPos] && wordMapping[relatedPos].role !== mapping.role) {
+                    relatedMapping = wordMapping[relatedPos];
+                    relatedElement = document.querySelector(`[data-position="${relatedPos}"]`);
+                    break;
+                }
+            }
+            
+            if (relatedMapping && relatedElement) {
+                const secondaryTooltip = createTooltip(relatedMapping, 'secondary-tooltip');
+                tooltips.push({
+                    element: secondaryTooltip, 
+                    mapping: relatedMapping, 
+                    position: relatedMapping.position,
+                    targetElement: relatedElement,
+                    placement: 'below'
+                });
+            }
         }
         
+        // Add tooltips to DOM and position them
+        tooltips.forEach((tooltip, index) => {
+            document.body.appendChild(tooltip.element);
+            positionTooltip(tooltip.targetElement, tooltip.element, tooltip.placement);
+            
+            // Animate in
+            setTimeout(() => {
+                tooltip.element.classList.add('show');
+            }, 10);
+        });
+        
+        // Highlight current word with role-specific styling
+        event.target.classList.add('highlighted');
+        
+        // Highlight related words with role-specific styling
+        if (mapping.related_positions) {
+            mapping.related_positions.forEach(relatedPos => {
+                const relatedWord = document.querySelector(`[data-position="${relatedPos}"]`);
+                if (relatedWord) {
+                    relatedWord.classList.add('related-highlighted');
+                }
+            });
+        }
+    }
+    
+    function createTooltip(mapping, tooltipClass) {
+        const tooltip = document.createElement('div');
+        tooltip.className = `word-tooltip ${tooltipClass}`;
+        
+        let typeInfo = '';
+        if (mapping.type && mapping.type !== mapping.wordplay_type) {
+            typeInfo = `<div class="tooltip-type">${mapping.type}</div>`;
+        } else if (mapping.wordplay_type && mapping.wordplay_type !== 'none') {
+            typeInfo = `<div class="tooltip-type">${mapping.wordplay_type}</div>`;
+        }
+        
+        let resultInfo = '';
+        if (mapping.result && mapping.result.trim() !== '') {
+            resultInfo = `<div class="tooltip-result">"${mapping.result}"</div>`;
+        }
+        
+        tooltip.innerHTML = `
+            <div class="tooltip-role">${mapping.role.charAt(0).toUpperCase() + mapping.role.slice(1)}</div>
+            ${typeInfo}
+            ${resultInfo}
+            <div class="tooltip-description">${mapping.description}</div>
+        `;
+        
+        return tooltip;
+    }
+    
+    function positionTooltip(targetElement, tooltip, placement) {
+        const rect = targetElement.getBoundingClientRect();
+        const tooltipRect = tooltip.getBoundingClientRect();
+        const viewportHeight = window.innerHeight;
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+        
+        let top, left;
+        const tooltipHeight = tooltipRect.height || 120; // Estimated height
+        
+        // Horizontal positioning - center the tooltip on the word
+        left = rect.left + scrollLeft + (rect.width / 2) - 150; // 150 = half of 300px max-width
+        
+        // Ensure tooltip doesn't go off the left edge
+        if (left < 10) {
+            left = 10;
+        }
+        
+        // Ensure tooltip doesn't go off the right edge
+        const tooltipWidth = 300; // Max width from CSS
+        if (left + tooltipWidth > window.innerWidth - 10) {
+            left = window.innerWidth - tooltipWidth - 10;
+        }
+        
+        // Vertical positioning based on placement
+        if (placement === 'above') {
+            top = rect.top + scrollTop - tooltipHeight - 10;
+            tooltip.classList.add('tooltip-above');
+            
+            // If not enough space above, force it above anyway but adjust if needed
+            if (top < 10) {
+                top = 10;
+            }
+        } else { // placement === 'below'
+            top = rect.bottom + scrollTop + 10;
+            tooltip.classList.add('tooltip-below');
+            
+            // If not enough space below, keep it below but adjust if needed
+            if (top + tooltipHeight > viewportHeight + scrollTop - 10) {
+                top = viewportHeight + scrollTop - tooltipHeight - 10;
+            }
+        }
+        
+        tooltip.style.left = left + 'px';
+        tooltip.style.top = top + 'px';
+        
+        // Adjust arrow position to point to the center of the target word
+        const arrow = tooltip.querySelector('::after') || tooltip;
+        const arrowOffset = rect.left + scrollLeft + (rect.width / 2) - left - 20; // 20 is default arrow position
+        if (arrowOffset > 10 && arrowOffset < tooltipWidth - 20) {
+            // Only adjust if the arrow would be within reasonable bounds
+            tooltip.style.setProperty('--arrow-offset', `${arrowOffset}px`);
+        }
+    }
+    
+    function hideTooltip() {
+        // Find and animate out existing tooltips
+        const existingTooltips = document.querySelectorAll('.word-tooltip');
+        existingTooltips.forEach(tooltip => {
+            tooltip.classList.remove('show');
+            // Remove after animation completes
+            setTimeout(() => {
+                if (tooltip.parentNode) {
+                    tooltip.parentNode.removeChild(tooltip);
+                }
+            }, 200);
+        });
+        
+        // Remove all highlight classes
+        document.querySelectorAll('.clue-word').forEach(word => {
+            word.classList.remove('highlighted', 'related-highlighted');
+        });
+    }
+    
+    function addClueRoleLegend() {
+        const legendContainer = document.querySelector('.clue-legend');
+        if (!legendContainer) {
+            const legend = document.createElement('div');
+            legend.className = 'clue-legend';
+            legend.innerHTML = `
+                <div class="legend-item">
+                    <div class="legend-color definition"></div>
+                    <span>Definition</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color indicator"></div>
+                    <span>Indicator</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color target"></div>
+                    <span>Target</span>
+                </div>
+            `;
+            
+            const interactiveSection = document.querySelector('.interactive-clue-section');
+            if (interactiveSection) {
+                interactiveSection.appendChild(legend);
+            }
+        }
+    }
+
+    function displaySolution(formattedClue, originalClue, solution) {
         // Display main solution
         const completeSolution = solution.complete_solution;
         document.getElementById('main-answer').textContent = completeSolution.solution || 'Unknown';
         
-        // Display definition
-        document.getElementById('definition-text').textContent = completeSolution.definition || 'Not provided';
-        
-        // Display wordplay components
-        const componentsContainer = document.getElementById('wordplay-components');
-        componentsContainer.innerHTML = '';
-        
-        if (completeSolution.wordplay_components && completeSolution.wordplay_components.length > 0) {
-            completeSolution.wordplay_components.forEach((component, index) => {
-                const componentDiv = document.createElement('div');
-                componentDiv.className = 'wordplay-component';
-                componentDiv.innerHTML = `
-                    <div class="component-header">
-                        <span class="component-number">${index + 1}</span>
-                        <span class="component-type">${component.wordplay_type}</span>
-                    </div>
-                    <div class="component-details">
-                        <div><strong>Indicator:</strong> "${component.indicator}"</div>
-                        ${component.target ? `<div><strong>Target:</strong> "${component.target}"</div>` : ''}
-                    </div>
-                `;
-                componentsContainer.appendChild(componentDiv);
-            });
+        // Setup interactive clue if word mapping is available
+        if (solution.interactive_clue && solution.interactive_clue.word_mapping) {
+            const interactiveSection = document.querySelector('.interactive-clue-section');
+            if (interactiveSection) {
+                interactiveSection.classList.remove('hidden');
+                const displayClue = solution.interactive_clue.original_clue;
+                setupInteractiveClue(displayClue, solution.interactive_clue.word_mapping);
+            }
         } else {
-            componentsContainer.innerHTML = '<div class="no-components">No wordplay components identified</div>';
+            const interactiveSection = document.querySelector('.interactive-clue-section');
+            if (interactiveSection) {
+                interactiveSection.classList.add('hidden');
+            }
         }
-
+        
         // Display attempted solutions if any
         const attemptsSection = document.getElementById('attempts-section');
         const attemptsList = document.getElementById('attempts-list');
@@ -116,33 +324,6 @@ document.addEventListener('DOMContentLoaded', function() {
             attemptsSection.classList.remove('hidden');
         } else {
             attemptsSection.classList.add('hidden');
-        }
-
-        // Display reasoning analysis if available
-        const reasoningSection = document.getElementById('reasoning-section');
-        const reasoningText = document.getElementById('reasoning-text');
-        const toggleButton = document.getElementById('toggle-reasoning');
-        
-        if (solution.reasoning_analysis) {
-            reasoningText.textContent = solution.reasoning_analysis;
-            reasoningSection.classList.remove('hidden');
-            
-            // Add toggle functionality
-            toggleButton.addEventListener('click', function() {
-                const isVisible = !reasoningText.classList.contains('hidden');
-                if (isVisible) {
-                    reasoningText.classList.add('hidden');
-                    toggleButton.textContent = 'Show Reasoning';
-                } else {
-                    reasoningText.classList.remove('hidden');
-                    toggleButton.textContent = 'Hide Reasoning';
-                }
-            });
-            
-            // Initially hide the reasoning text
-            reasoningText.classList.add('hidden');
-        } else {
-            reasoningSection.classList.add('hidden');
         }
 
         solutionDisplay.classList.remove('hidden');
